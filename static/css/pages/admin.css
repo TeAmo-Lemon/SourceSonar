@@ -377,7 +377,6 @@ body.page-admin .source-card-meta .source-address-text { max-width: min(620px, 7
 
     body.page-report #hotNewsList.news-list { padding: 14px;}
 
-    body.page-index .chat-window { width: 100%; height: 100%; bottom: 0; right: 0; border-radius: 0;}
 
     body.page-topics .topics-hero,
     body.page-topics .topic-card-head,
@@ -496,36 +495,4 @@ body.page-admin .source-health-meter.bad .source-health-bar i { background: line
 body.page-admin .source-card-meta div { align-items: flex-start;
 }
 
-body.page-admin .tool-param-line { margin-bottom: 12px; color: var(--text-light); font-size: 0.78rem; line-height: 1.5;
-}
-
-body.page-admin .tool-test-output { margin-top: 14px; padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-soft);
-}
-
-body.page-admin .tool-example-panel { margin-bottom: 14px; padding: 12px; border: 1px solid color-mix(in srgb, var(--primary-color) 18%, var(--border-color)); border-radius: 12px; background: color-mix(in srgb, var(--primary-light) 42%, var(--bg-card));
-}
-
-body.page-admin .tool-example-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px;
-}
-
-body.page-admin .tool-example-head strong { color: var(--text-main); font-size: 0.92rem;
-}
-
-body.page-admin .tool-example-code { max-height: 260px; overflow: auto; margin: 0; padding: 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-card); color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; font-size: 0.74rem; line-height: 1.5;
-}
-
-body.page-admin .tool-test-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; margin-bottom: 10px;
-}
-
-body.page-admin .tool-test-head strong { color: var(--text-main);
-}
-
-body.page-admin .tool-test-head span { color: var(--text-light); font-size: 0.8rem;
-}
-
-body.page-admin .tool-test-actions { display: flex; justify-content: flex-end; margin: 10px 0;
-}
-
-body.page-admin .tool-test-result { max-height: 360px; overflow: auto; margin: 0; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-card); color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; font-size: 0.78rem; line-height: 1.5;
-}
 

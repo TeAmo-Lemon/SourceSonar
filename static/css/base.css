@@ -1,8 +1,8 @@
-﻿/* 本文件定义 TrendSonar 全站视觉系统、响应式布局和页面组件样式。 */
-:root { --primary-color: #10b981; --primary-hover: #059669; --primary-light: rgba(16, 185, 129, 0.13); --text-main: #10201c; --text-secondary: #475569; --text-light: #8a99a8; --bg-body: #f4f8f6; --bg-card: #ffffff; --bg-soft: #eef6f3; --border-color: rgba(16, 32, 28, 0.11); --shadow: 0 1px 2px rgba(16, 32, 28, 0.06), 0 8px 24px rgba(16, 32, 28, 0.05); --shadow-sm: 0 1px 2px rgba(16, 32, 28, 0.05); --shadow-md: 0 14px 34px rgba(16, 32, 28, 0.10); --shadow-lg: 0 28px 80px rgba(16, 32, 28, 0.16); --radius: 16px; --radius-lg: 20px; --accent-blue: oklch(58% 0.16 245); --accent-cyan: oklch(68% 0.12 205); --heat-hot: oklch(60% 0.18 35); --heat-warm: oklch(70% 0.14 78); --ok-color: oklch(58% 0.14 150); --warn-color: #f59e0b; --danger-color: oklch(58% 0.18 28); --sent-pos-bg: var(--success-light); --sent-pos-text: #047857; --sent-neg-bg: var(--heat-light); --sent-neg-text: #dc2626; --sent-neu-bg: rgba(100, 116, 139, 0.10); --sent-neu-text: #64748b; --tag-category-bg: var(--secondary-light); --tag-category-text: #1d4ed8; --chart-grid: color-mix(in oklch, var(--text-main) 10%, transparent); --chart-axis: color-mix(in oklch, var(--text-main) 36%, transparent); --surface-raise: color-mix(in oklch, var(--bg-card) 88%, var(--primary-color)); --card-index: 0; --surface-border-strong: color-mix(in srgb, var(--border-color) 64%, var(--primary-color)); --surface-glow: rgba(16, 185, 129, 0.09); --surface-warm-glow: rgba(37, 99, 235, 0.06); --secondary-color: #2563eb; --secondary-light: rgba(37, 99, 235, 0.11); --heat-color: #ef4444; --heat-light: rgba(239, 68, 68, 0.11); --warn-light: rgba(245, 158, 11, 0.13); --success-color: #10b981; --success-light: rgba(16, 185, 129, 0.13);
+﻿/* 本文件定义 SourceSonar 全站视觉系统、响应式布局和页面组件样式。 */
+:root { --primary-color: #4f46e5; --primary-hover: #4338ca; --primary-light: rgba(79, 70, 229, 0.13); --text-main: #111827; --text-secondary: #4b5563; --text-light: #99a1b2; --bg-body: #f5f7fb; --bg-card: #ffffff; --bg-soft: #eef1f8; --border-color: rgba(17, 24, 39, 0.11); --shadow: 0 1px 2px rgba(17, 24, 39, 0.05), 0 10px 30px rgba(17, 24, 39, 0.06); --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.05); --shadow-md: 0 14px 34px rgba(17, 24, 39, 0.10); --shadow-lg: 0 28px 80px rgba(17, 24, 39, 0.16); --radius: 16px; --radius-lg: 20px; --accent-blue: oklch(58% 0.16 250); --accent-cyan: oklch(70% 0.12 210); --heat-hot: oklch(60% 0.18 35); --heat-warm: oklch(70% 0.14 78); --ok-color: oklch(58% 0.14 150); --warn-color: #f59e0b; --danger-color: oklch(58% 0.18 28); --sent-pos-bg: var(--success-light); --sent-pos-text: #047857; --sent-neg-bg: var(--heat-light); --sent-neg-text: #dc2626; --sent-neu-bg: rgba(100, 116, 139, 0.10); --sent-neu-text: #64748b; --tag-category-bg: rgba(59, 130, 246, 0.12); --tag-category-text: #1d4ed8; --chart-grid: color-mix(in oklch, var(--text-main) 10%, transparent); --chart-axis: color-mix(in oklch, var(--text-main) 36%, transparent); --surface-raise: color-mix(in oklch, var(--bg-card) 88%, var(--primary-color)); --card-index: 0; --surface-border-strong: color-mix(in srgb, var(--border-color) 64%, var(--primary-color)); --surface-glow: rgba(79, 70, 229, 0.10); --surface-warm-glow: rgba(6, 182, 212, 0.07); --secondary-color: #06b6d4; --secondary-light: rgba(6, 182, 212, 0.12); --heat-color: #ef4444; --heat-light: rgba(239, 68, 68, 0.11); --warn-light: rgba(245, 158, 11, 0.13); --success-color: #10b981; --success-light: rgba(16, 185, 129, 0.13);
 }
 
-html[data-theme="dark"] { color-scheme: dark; --primary-color: #34d399; --primary-hover: #10b981; --primary-light: rgba(52, 211, 153, 0.16); --text-main: #eefcf7; --text-secondary: #b7c8c0; --text-light: #7d9189; --bg-body: #071411; --bg-card: #0d1d19; --bg-soft: #112720; --border-color: rgba(183, 200, 192, 0.15); --shadow: 0 1px 2px rgba(0, 0, 0, 0.36); --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.34); --shadow-md: 0 18px 40px rgba(0, 0, 0, 0.36); --shadow-lg: 0 30px 90px rgba(0, 0, 0, 0.52); --accent-blue: oklch(72% 0.13 245); --accent-cyan: oklch(78% 0.11 205); --heat-hot: oklch(72% 0.16 35); --heat-warm: oklch(78% 0.14 82); --ok-color: oklch(72% 0.14 150); --warn-color: #fbbf24; --danger-color: oklch(72% 0.14 28); --sent-pos-text: #6ee7b7; --sent-neg-text: #fda4af; --sent-neu-text: #cbd5e1; --tag-category-text: #93c5fd; --surface-glow: rgba(52, 211, 153, 0.10); --surface-warm-glow: rgba(96, 165, 250, 0.08); --secondary-color: #60a5fa; --secondary-light: rgba(96, 165, 250, 0.16); --heat-color: #fb7185; --heat-light: rgba(251, 113, 133, 0.14); --warn-light: rgba(251, 191, 36, 0.15); --success-color: #34d399; --success-light: rgba(52, 211, 153, 0.14);
+html[data-theme="dark"] { color-scheme: dark; --primary-color: #818cf8; --primary-hover: #6366f1; --primary-light: rgba(129, 140, 248, 0.16); --text-main: #f3f5fb; --text-secondary: #b9c2d4; --text-light: #7c87a0; --bg-body: #0a0f1e; --bg-card: #111829; --bg-soft: #1a2338; --border-color: rgba(196, 205, 228, 0.14); --shadow: 0 1px 2px rgba(0, 0, 0, 0.36); --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.34); --shadow-md: 0 18px 40px rgba(0, 0, 0, 0.36); --shadow-lg: 0 30px 90px rgba(0, 0, 0, 0.52); --accent-blue: oklch(72% 0.13 250); --accent-cyan: oklch(78% 0.11 210); --heat-hot: oklch(72% 0.16 35); --heat-warm: oklch(78% 0.14 82); --ok-color: oklch(72% 0.14 150); --warn-color: #fbbf24; --danger-color: oklch(72% 0.14 28); --sent-pos-text: #6ee7b7; --sent-neg-text: #fda4af; --sent-neu-text: #cbd5e1; --tag-category-text: #93c5fd; --surface-glow: rgba(129, 140, 248, 0.12); --surface-warm-glow: rgba(34, 211, 238, 0.08); --secondary-color: #22d3ee; --secondary-light: rgba(34, 211, 238, 0.14); --heat-color: #fb7185; --heat-light: rgba(251, 113, 133, 0.14); --warn-light: rgba(251, 191, 36, 0.15); --success-color: #34d399; --success-light: rgba(52, 211, 153, 0.14);
 }
 
 * { box-sizing: border-box; }
@@ -35,19 +35,13 @@ button { cursor: pointer; border: 1px solid transparent; background: transparent
 
 .nav-links { display: flex; align-items: center; min-width: 0; }
 
-.nav-link { position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0; text-decoration: none; border-radius: 0; background: transparent; box-shadow: none; color: var(--text-secondary); font-size: 0.9rem; font-weight: 760; line-height: 34px; transform: none; transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+.nav-link { position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 14px; text-decoration: none; border-radius: 999px; background: transparent; box-shadow: none; color: var(--text-secondary); font-size: 0.9rem; font-weight: 760; line-height: 34px; transform: none; transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 }
 
-.nav-link::after { content: ""; position: absolute; right: 0; bottom: 2px; left: 0; height: 2px; border-radius: 999px; background: transparent;
+.nav-link:hover { color: var(--primary-color); background: color-mix(in srgb, var(--primary-light) 55%, transparent); box-shadow: none; transform: none;
 }
 
-.nav-link:hover { color: var(--primary-color); background: transparent; box-shadow: none; transform: none;
-}
-
-.nav-link.active { color: var(--primary-color); background: transparent; box-shadow: none; transform: none;
-}
-
-.nav-link.active::after { background: var(--primary-color);
+.nav-link.active { color: var(--primary-color); background: var(--primary-light); box-shadow: none; transform: none;
 }
 
 /* 主题切换按钮：合并全站各处定义 */
@@ -55,12 +49,6 @@ button { cursor: pointer; border: 1px solid transparent; background: transparent
 }
 
 .theme-toggle:hover { color: var(--primary-color); border-color: color-mix(in srgb, var(--primary-color) 26%, var(--border-color)); background: color-mix(in srgb, var(--primary-light) 32%, var(--bg-card)); box-shadow: none; transform: none;
-}
-
-.github-link { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-radius: 8px; color: var(--text-secondary); transition: color 0.2s;
-}
-
-.github-link:hover { color: var(--primary-color);
 }
 
 .config-warning { margin-top: 12px; margin-bottom: 12px; padding: 12px 14px; border-radius: var(--radius); border: 1px solid rgba(245, 158, 11, 0.35);}
@@ -71,7 +59,7 @@ button { cursor: pointer; border: 1px solid transparent; background: transparent
 
 @media (max-width: 640px) { .header-content { flex-wrap: wrap; align-items: flex-start; }
     .header-actions { width: 100%; justify-content: space-between; }
-    .nav-links { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; gap: 12px; scrollbar-width: none;}
+    .nav-links { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; gap: 6px; scrollbar-width: none;}
     .nav-links::-webkit-scrollbar { display: none; }
 }
 
@@ -506,12 +494,6 @@ html[data-theme="dark"] .cm-s-default .cm-error { color: #ef4444; background: rg
     to { opacity: 1; transform: translateY(0);}
 }
 
-@keyframes softPulse { 0%, 100% { box-shadow: 0 14px 32px color-mix(in srgb, var(--primary-color) 24%, transparent);}
-    50% { box-shadow: 0 18px 40px color-mix(in srgb, var(--primary-color) 34%, transparent);}
-}
-
-.github-link { transition: color 0.2s; }
-
 .news-card { position: relative; transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease; animation-delay: calc(var(--card-index, 0) * 30ms);
 }
 
@@ -638,7 +620,7 @@ body { font-feature-settings: "tnum" 1; text-rendering: optimizeLegibility; -web
 .detail-source-row { border-radius: 14px;
 }
 
-/* 全站升级：统一 TrendSonar 新闻产品视觉、信息密度与响应式交互。 */
+/* 全站升级：统一 SourceSonar 新闻产品视觉、信息密度与响应式交互。 */
 html { background: var(--bg-body);
 }
 
@@ -652,8 +634,8 @@ body { font-family: "Söhne", "Avenir Next", -apple-system, BlinkMacSystemFont, 
 .logo { letter-spacing: -0.01em;
 }
 
-.logo-icon { display: inline-grid; place-items: center; color: var(--primary-color); background:
-        linear-gradient(180deg, color-mix(in srgb, var(--primary-light) 72%, var(--bg-card)), var(--bg-card)); border: 1px solid color-mix(in srgb, var(--primary-color) 18%, var(--border-color));}
+.logo-icon { display: inline-grid; place-items: center; color: var(--primary-color); background: none; border: none;
+}
 
 .text-danger { color: var(--heat-color) !important;
 }
@@ -706,7 +688,7 @@ body { font-family: "Söhne", "Avenir Next", -apple-system, BlinkMacSystemFont, 
 .summary-placeholder { font-style: normal;
 }
 
-/* 新闻流体验收敛层：让 TrendSonar 的热度、聚类、来源健康和报告图表更适合日常浏览。 */
+/* 新闻流体验收敛层：让 SourceSonar 的热度、聚类、来源健康和报告图表更适合日常浏览。 */
 .inline-loading,
 .inline-error { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary);
 }
@@ -746,13 +728,10 @@ body { font-family: "Söhne", "Avenir Next", -apple-system, BlinkMacSystemFont, 
 .logo-icon svg { width: 19px; height: 19px;
 }
 
-.github-link svg { width: 16px; height: 16px;
-}
-
 .news-card { overflow: visible; border-color: color-mix(in srgb, var(--border-color) 82%, transparent); background: var(--bg-card); box-shadow: none; animation: none;
 }
 
-.news-card:hover { border-color: color-mix(in srgb, var(--border-color) 72%, var(--primary-color)); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06); transform: none;
+.news-card:hover { border-color: color-mix(in srgb, var(--primary-color) 24%, var(--border-color)); box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07); transform: translateY(-1px);
 }
 
 .news-card::before,
@@ -770,7 +749,7 @@ body { font-family: "Söhne", "Avenir Next", -apple-system, BlinkMacSystemFont, 
 
 /* 极简阅读收尾层 */
 
-.logo { gap: 8px; font-size: 0.95rem; font-weight: 820;
+.logo { gap: 9px; font-size: 1rem; font-weight: 850;
 }
 
 .logo-icon { width: 30px; height: 30px; border-radius: 10px; box-shadow: none;
@@ -779,7 +758,7 @@ body { font-family: "Söhne", "Avenir Next", -apple-system, BlinkMacSystemFont, 
 .header-actions { gap: 10px;
 }
 
-.nav-links { gap: 24px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none;
+.nav-links { gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none;
 }
 
 .meta-row { align-items: center; gap: 10px; margin-bottom: 12px;
@@ -820,12 +799,11 @@ body { font-family: "Söhne", "Avenir Next", -apple-system, BlinkMacSystemFont, 
 
     .header-actions { width: auto; justify-content: flex-end; gap: 8px;}
 
-    .nav-links { width: auto; gap: 14px;}
+    .nav-links { width: auto; gap: 6px;}
 
     .nav-link { min-height: 32px; font-size: 0.86rem; line-height: 32px;}
 
-    .theme-toggle,
-    .github-link { width: 27px; min-width: 27px; height: 27px;}
+    .theme-toggle { width: 27px; min-width: 27px; height: 27px;}
 
     .meta-row { gap: 8px;}
 }
@@ -846,12 +824,10 @@ body { font-family: "Söhne", "Avenir Next", -apple-system, BlinkMacSystemFont, 
 .header-actions { flex-shrink: 0; margin-left: auto;
 }
 
-.theme-toggle,
-.github-link { color: var(--text-secondary);
+.theme-toggle { color: var(--text-secondary);
 }
 
-.theme-toggle svg,
-.github-link svg { display: block; flex-shrink: 0;
+.theme-toggle svg { display: block; flex-shrink: 0;
 }
 
 .news-meta-row { align-items: flex-start; margin: 8px 0 12px;

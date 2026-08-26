@@ -2,7 +2,7 @@
 {% extends "base.html" %}
 {% block title %}{{ settings.APP_NAME }} - 舆情分析报告{% endblock %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/pages/report.css?version=v0.1.8.6">
+    <link rel="stylesheet" href="/static/css/pages/report.css?version=v0.1.10.0">
     <script src="/static/echarts.min.js"></script>
     <script src="/static/marked.min.js"></script>
 {% endblock %}
@@ -10,7 +10,7 @@
 
 <div class="loading-overlay" id="loading">
     <div class="spinner"></div>
-    <div>TrendSonar 正在全网分析中...</div>
+    <div>{{ settings.APP_NAME }} 正在全网分析中...</div>
 </div>
 
 <div class="container">

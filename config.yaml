@@ -1,6 +1,6 @@
 # ================= 基础配置 =================
 # APP_NAME: 应用名称
-APP_NAME: TrendSonar
+APP_NAME: SourceSonar
 # LOG_LEVEL: 日志等级: DEBUG, INFO, WARNING, ERROR
 LOG_LEVEL: INFO
 # LOG_RETENTION_DAYS: 日志保留天数（仅保留最近 N 天）
@@ -103,7 +103,6 @@ AI_ROUTE:
   # --- 报告生成 ---
   REPORT: "backup" # 日报/周报生成
   # --- 交互对话 ---
-  CHAT: "main" # 实时问答/助手对话
 
 # ================= 算法调优参数 =================
 # 聚类相似度阈值 (0.0 - 1.0)，建议 0.75，越高越严格

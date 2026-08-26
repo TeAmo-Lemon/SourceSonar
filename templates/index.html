@@ -1,8 +1,8 @@
-{# 本文件渲染首页新闻流、筛选工具、AI 助手和新闻详情弹窗。 #}
+{# 本文件渲染首页新闻流、筛选工具和新闻详情弹窗。 #}
 {% extends "base.html" %}
-{% block title %}TrendSonar{% endblock %}
+{% block title %}{{ settings.APP_NAME }}{% endblock %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/pages/index.css?version=v0.1.8.6">
+    <link rel="stylesheet" href="/static/css/pages/index.css?version=v0.1.11.0">
     <script src="/static/echarts.min.js"></script>
 {% endblock %}
 {% block content %}
@@ -59,82 +59,79 @@
         </div>
     </div>
 
-    <div class="container">
-        <!-- 分类标签 -->
-        <div id="categoryTabs" class="category-tabs-container">
-        </div>
+    <div class="container index-layout">
+        <!-- 桌面端筛选侧栏 -->
+        <aside class="index-sidebar" aria-label="新闻筛选">
+            <div class="sidebar-card">
+                <div class="sidebar-title">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
+                        <path fill="currentColor" d="m8.338 2.416l-.682 1.18c-1.94-.585-3.676-.3-4.275.737c-.784 1.36.527 3.769 3.12 5.265c2.591 1.496 5.333 1.428 6.118.069c.598-1.037-.022-2.683-1.5-4.07l.683-1.182c2.055 1.806 2.975 4.18 1.972 5.918c-1.24 2.148-4.793 2.237-7.94.42C2.685 8.935.986 5.815 2.226 3.667c1.003-1.738 3.52-2.128 6.11-1.252zm2.252-1.234l1.154.666l-3.333 5.774l-1.155-.667zm-6.102 12.15h6.846v1.334H3.345a.67.67 0 0 1-.676-.615a.66.66 0 0 1 .087-.385l1.5-2.598l1.155.667l-.923 1.598z"/>
+                    </svg>
+                    <span>筛选</span>
+                </div>
 
-        <!-- 移动端顶部工具条 -->
-        <div class="mobile-top-bar">
-            <div class="mobile-search-group">
-                <input type="text" id="mobileTopSearchInput" placeholder="搜索新闻 (支持语义)...">
-                <button class="btn-icon-search" id="mobileTopSearchBtn">搜索</button>
+                <div class="sidebar-search">
+                    <div class="search-box toolbar-search">
+                        <input type="text" id="desktopSearchInput" class="input-text search-input-desktop" placeholder="搜索新闻、实体或事件线索...">
+                    </div>
+                    <div class="sidebar-search-actions">
+                        <button id="desktopSearchBtn" class="btn-toolbar-action">搜索</button>
+                        <button id="desktopResetBtn" class="topics-ghost-btn">重置</button>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-label">排序方式</div>
+                    <div class="topics-segmented">
+                        <button class="topics-filter-btn" data-sort="date" id="desktopSortDate" type="button">最新优先</button>
+                        <button class="topics-filter-btn" data-sort="heat" id="desktopSortHeat" type="button">热度优先</button>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-label">时间范围</div>
+                    <select id="desktopTimeSelect" class="select-filter toolbar-time"></select>
+                    <div id="desktopDateRange" class="toolbar-date-range is-hidden">
+                        <input type="date" id="desktopStartDate" class="input-date">
+                        <span class="date-sep">-</span>
+                        <input type="date" id="desktopEndDate" class="input-date">
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-label">地区筛选</div>
+                    <div id="desktopRegionSelect" class="ms-container toolbar-select full-width"></div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-label">来源筛选</div>
+                    <div id="desktopSourceSelect" class="ms-container toolbar-select full-width"></div>
+                </div>
             </div>
-            <button class="btn-more-filter" id="mobileMoreBtn">筛选</button>
-        </div>
+        </aside>
 
-        <!-- 桌面端工具条 -->
-        <div class="desktop-toolbar">
-            <div class="topics-segmented">
-                <button class="topics-filter-btn" data-sort="date" id="desktopSortDate" type="button">最新优先</button>
-                <button class="topics-filter-btn" data-sort="heat" id="desktopSortHeat" type="button">热度优先</button>
+        <main class="index-main">
+            <!-- 移动端顶部工具条 -->
+            <div class="mobile-top-bar">
+                <div class="mobile-search-group">
+                    <input type="text" id="mobileTopSearchInput" placeholder="搜索新闻 (支持语义)...">
+                    <button class="btn-icon-search" id="mobileTopSearchBtn">搜索</button>
+                </div>
+                <button class="btn-more-filter" id="mobileMoreBtn">筛选</button>
             </div>
 
-            <select id="desktopTimeSelect" class="select-filter toolbar-time"></select>
-            <div id="desktopDateRange" class="toolbar-date-range is-hidden">
-                <input type="date" id="desktopStartDate" class="input-date">
-                <span class="date-sep">-</span>
-                <input type="date" id="desktopEndDate" class="input-date">
+            <!-- 分类标签 -->
+            <div id="categoryTabs" class="category-tabs-container">
             </div>
 
-            <div id="desktopSourceSelect" class="ms-container toolbar-select"></div>
-            <div id="desktopRegionSelect" class="ms-container toolbar-select"></div>
-
-            <div class="search-box toolbar-search">
-                <input type="text" id="desktopSearchInput" class="input-text search-input-desktop" placeholder="搜索新闻、实体或事件线索...">
+            <!-- 新闻列表 -->
+            <div id="newsList" class="news-list">
             </div>
-            <button id="desktopSearchBtn" class="btn-toolbar-action">搜索</button>
-            <button id="desktopResetBtn" class="topics-ghost-btn">重置</button>
-        </div>
 
-        <!-- 新闻列表 -->
-        <div id="newsList" class="news-list">
-        </div>
-
-        <div id="loadingState" class="loading-state">
-            加载中...
-        </div>
-    </div>
-
-    <button id="chatBtn" class="chat-widget-btn" type="button" aria-label="打开 TrendSonar AI 助手" aria-expanded="false">
-        <span class="chat-widget-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none">
-                <path d="M6.75 17.25C5.65 16.18 5 14.73 5 13.13C5 9.74 7.91 7 11.5 7H12.5C16.09 7 19 9.74 19 13.13C19 16.52 16.09 19.25 12.5 19.25H10.46L7.55 21V18.7C7.26 18.57 6.99 18.42 6.75 17.25Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                <path d="M9.25 12.88H9.26M12 12.88H12.01M14.75 12.88H14.76" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-            </svg>
-        </span>
-    </button>
-    <div id="chatWindow" class="chat-window">
-        <div class="chat-header">
-            <span>TrendSonar AI</span>
-            <div class="chat-header-controls">
-                <button id="modelSwitch" class="chat-switch" type="button" title="点击切换备用 AI">Main</button>
-                <button id="closeChat" class="chat-close" type="button" aria-label="关闭 AI 助手">&times;</button>
+            <div id="loadingState" class="loading-state">
+                加载中...
             </div>
-        </div>
-        <div id="chatMessages" class="chat-messages">
-            <div class="message ai">你好！我是 TrendSonar 新闻助手，有什么可以帮你？</div>
-        </div>
-        <div class="chat-input-area">
-            <div class="chat-quick-questions">
-                <div class="chat-chip" data-quick-msg="今天有哪些热点新闻？">今天有哪些热点新闻？</div>
-                <div class="chat-chip" data-quick-msg="昨天发生了什么？">昨天发生了什么？</div>
-            </div>
-            <div class="chat-input-row">
-                <input type="text" id="chatInput" class="chat-input" placeholder="输入问题...">
-                <button id="chatSend" class="chat-send">发送</button>
-            </div>
-        </div>
+        </main>
     </div>
 
     <div id="newsDetailModal" class="news-detail-modal" aria-hidden="true">
@@ -171,5 +168,5 @@
 {% block scripts %}
     <script id="page-data" type="application/json">{{ {"uiDefaults": ui_defaults | default(settings.UI_DEFAULTS, true)} | tojson }}</script>
     <script src="/static/marked.min.js"></script>
-    <script src="/static/js/pages/index.js?version=v0.1.8.7"></script>
+    <script src="/static/js/pages/index.js?version=v0.1.11.0"></script>
 {% endblock %}

@@ -356,7 +356,7 @@ body.page-topics.page-topic-detail .word-cloud-container { display: flex; flex-w
 
 body.page-topics.page-topic-detail .cloud-tag { padding: 7px 13px; border-radius: 999px; cursor: default; white-space: nowrap; line-height: 1.2; font-weight: 850; letter-spacing: 0.005em; box-shadow: none; }
 
-body.page-topics.page-topic-detail .cloud-tag.tone-entity { color: #1d4ed8 !important; border: 1px solid rgba(59, 130, 246, 0.24); background: #eff6ff !important; }
+body.page-topics.page-topic-detail .cloud-tag.tone-entity { color: #4338ca !important; border: 1px solid rgba(79, 70, 229, 0.24); background: #eef2ff !important; }
 
 body.page-topics.page-topic-detail .cloud-tag.tone-positive { color: #047857 !important; border: 1px solid rgba(16, 185, 129, 0.24); background: #ecfdf5 !important; }
 
@@ -855,7 +855,6 @@ body.page-topics.page-topic-detail .card-title::before { content: ""; width: 8px
 
     body.page-report #hotNewsList.news-list { padding: 14px;}
 
-    body.page-index .chat-window { width: 100%; height: 100%; bottom: 0; right: 0; border-radius: 0;}
 
     body.page-topics .topics-hero,
     body.page-topics .topic-card-head,

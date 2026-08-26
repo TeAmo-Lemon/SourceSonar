@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     - 集中管理项目运行所需的配置，并提供默认值与类型校验
     """
 
-    APP_NAME: str = "TrendSonar"
+    APP_NAME: str = "SourceSonar"
     VERSION: str = "0.2.8"
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
@@ -164,8 +164,7 @@ class Settings(BaseSettings):
         "TOPIC_TIMELINE": "backup",
         "TOPIC_OVERVIEW": "backup",
         "TOPIC_INITIAL_SUMMARY": "main",
-        "REPORT": "backup",
-        "CHAT": "backup"
+        "REPORT": "backup"
     }
 
     model_config = SettingsConfigDict(

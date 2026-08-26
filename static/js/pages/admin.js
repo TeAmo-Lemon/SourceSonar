@@ -8,82 +8,6 @@ const adminPageData = adminPageDataEl ? JSON.parse(adminPageDataEl.textContent |
     let sources = [];
     let sourcePreviewResults = {};
     let sourceContentTestResults = {};
-    let agentToolsData = { builtin_tools: [], custom_tools: [] };
-    let agentToolTestArgs = {};
-    const AGENT_TOOL_EXAMPLES = {
-        searxng: {
-            name: "searxng_search",
-            title: "SearXNG 网页搜索",
-            description: "调用 SearXNG /search 接口检索公开网页结果，适合补充外部资料。需要将 base_url 改成你的 SearXNG 服务地址。",
-            parameters: {
-                q: {
-                    type: "string",
-                    default: "TrendSonar 新闻",
-                    description: "搜索关键词或自然语言问题"
-                },
-                base_url: {
-                    type: "string",
-                    default: "http://127.0.0.1:8080",
-                    description: "SearXNG 服务根地址，不要以斜杠结尾"
-                },
-                language: {
-                    type: "string",
-                    default: "zh-CN",
-                    description: "搜索语言，例如 zh-CN、en"
-                },
-                categories: {
-                    type: "string",
-                    default: "general",
-                    description: "搜索分类，例如 general、news、science"
-                },
-                time_range: {
-                    type: "string",
-                    default: "",
-                    description: "可选时间范围：day、week、month、year；留空不限制"
-                },
-                limit: {
-                    type: "integer",
-                    default: 5,
-                    description: "返回结果数量上限"
-                }
-            },
-            executor: {
-                type: "http",
-                method: "GET",
-                url: "{base_url}/search",
-                query: {
-                    q: "{q}",
-                    format: "json",
-                    language: "{language}",
-                    categories: "{categories}",
-                    time_range: "{time_range}"
-                },
-                result_path: "results",
-                item_fields: ["title", "url", "content", "engine", "publishedDate"],
-                limit: 5,
-                timeout: 20
-            },
-            prompt_hint: [
-                "执行方式：",
-                "- 使用 HTTP GET 请求 {base_url}/search。",
-                "- 查询参数至少包含 q={q}、format=json、language={language}、categories={categories}。",
-                "- 如果 time_range 不为空，附加 time_range={time_range}。",
-                "- 从 JSON 响应的 results 数组取前 limit 条。",
-                "",
-                "返回字段：",
-                "- title：结果标题",
-                "- url：结果链接",
-                "- content：摘要文本",
-                "- engine：来源搜索引擎",
-                "- publishedDate：发布时间（如果有）",
-                "",
-                "使用规则：",
-                "- 只依据返回结果回答，不要把搜索结果当成已核实新闻。",
-                "- 引用外部网页时保留 url。",
-                "- 如果 SearXNG 不可用或结果为空，说明没有查到。"
-            ].join("\n")
-        }
-    };
     let logsTimer = null;
     let activeTab = "config";
 
@@ -314,7 +238,7 @@ const adminPageData = adminPageDataEl ? JSON.parse(adminPageDataEl.textContent |
         CRAWLER_PAGE_TIMEOUT_MS: 60000,
         CRAWLER_RETRY_ATTEMPTS: 2,
         CRAWLER_RETRY_DELAY_SECONDS: 8,
-        AI_USER_AGENT: "TrendSonar/0.2.8",
+        AI_USER_AGENT: "SourceSonar/0.2.8",
         NEWS_CATEGORY_DESCRIPTIONS: {},
         "UI_DEFAULTS.INDEX.TIME_RANGE": "today",
         "UI_DEFAULTS.INDEX.SORT_BY": "heat",
@@ -337,7 +261,7 @@ const adminPageData = adminPageDataEl ? JSON.parse(adminPageDataEl.textContent |
     };
 
     const CONFIG_FIELD_HELP = {
-        APP_NAME: "用于页面标题和系统标识。示例：TrendSonar。",
+        APP_NAME: "用于页面标题和系统标识。示例：SourceSonar。",
         LOG_LEVEL: "控制日志详细程度。生产环境建议 INFO，排查问题时可临时改为 DEBUG。",
         PORT: "Web 服务监听端口。示例：8193，修改后需要通过新端口访问。",
         DATABASE_URL: "数据库连接地址。SQLite 示例：sqlite+aiosqlite:///data/trendsonar.db；PostgreSQL 示例：postgresql+asyncpg://user:pass@host:5432/db。",
@@ -352,7 +276,7 @@ const adminPageData = adminPageDataEl ? JSON.parse(adminPageDataEl.textContent |
         BACKUP_AI_API_KEY: "备用大模型 API Key。可与主力模型相同，也可使用另一个服务商。",
         BACKUP_AI_MODEL: "备用模型名称。适合放成本低或稳定性高的模型。示例：deepseek-chat。",
         BACKUP_AI_CONCURRENCY: "备用模型最大并发请求数。建议根据备用服务商限流设置，通常 3-10。",
-        AI_USER_AGENT: "调用主模型、备用模型和 Embedding 服务时使用的 User-Agent。留空则使用客户端默认值，示例：TrendSonar/0.2.8。",
+        AI_USER_AGENT: "调用主模型、备用模型和 Embedding 服务时使用的 User-Agent。留空则使用客户端默认值，示例：SourceSonar/0.2.8。",
         SCHEDULE_INTERVAL_MINUTES: "自动抓取和分析任务间隔，单位分钟。示例：120 表示每 2 小时执行一次。",
         AUTO_SUMMARY_TOP_N: "每轮自动为热度最高的多少条新闻生成摘要。示例：30。",
         AUTO_ANALYSIS_TOP_N: "每轮自动深度分析的新闻数量上限。示例：500，数据量大时可调低。",
@@ -1258,25 +1182,21 @@ const adminPageData = adminPageDataEl ? JSON.parse(adminPageDataEl.textContent |
         const tabSourcesBtn = document.getElementById("tabSourcesBtn");
         const tabLogsBtn = document.getElementById("tabLogsBtn");
         const tabPromptsBtn = document.getElementById("tabPromptsBtn");
-        const tabToolsBtn = document.getElementById("tabToolsBtn");
 
         const panelConfig = document.getElementById("panelConfig");
         const panelSources = document.getElementById("panelSources");
         const panelLogs = document.getElementById("panelLogs");
         const panelPrompts = document.getElementById("panelPrompts");
-        const panelTools = document.getElementById("panelTools");
 
         if (tabConfigBtn) tabConfigBtn.classList.toggle("active", tab === "config");
         if (tabSourcesBtn) tabSourcesBtn.classList.toggle("active", tab === "sources");
         if (tabLogsBtn) tabLogsBtn.classList.toggle("active", tab === "logs");
         if (tabPromptsBtn) tabPromptsBtn.classList.toggle("active", tab === "prompts");
-        if (tabToolsBtn) tabToolsBtn.classList.toggle("active", tab === "tools");
 
         if (panelConfig) panelConfig.classList.toggle("active", tab === "config");
         if (panelSources) panelSources.classList.toggle("active", tab === "sources");
         if (panelLogs) panelLogs.classList.toggle("active", tab === "logs");
         if (panelPrompts) panelPrompts.classList.toggle("active", tab === "prompts");
-        if (panelTools) panelTools.classList.toggle("active", tab === "tools");
 
         if (logsTimer) {
             clearInterval(logsTimer);
@@ -1297,8 +1217,6 @@ const adminPageData = adminPageDataEl ? JSON.parse(adminPageDataEl.textContent |
             });
         } else if (tab === "prompts") {
             loadPrompts();
-        } else if (tab === "tools") {
-            loadAgentTools();
         } else if (tab === "sources") {
              loadSources();
              // 延迟重算高度，等待面板 DOM 完成切换。
@@ -1450,239 +1368,6 @@ const adminPageData = adminPageDataEl ? JSON.parse(adminPageDataEl.textContent |
         closePromptModal();
         setStatus(statusEl, "提示词保存成功", "ok");
     }
-
-    // --- 智能体工具管理 ---
-    async function loadAgentTools() {
-        const statusEl = document.getElementById("adminStatus");
-        setStatus(statusEl, "加载工具中...", "");
-        const resp = await fetch("/api/admin/agent_tools", { method: "GET", cache: "no-store" });
-        if (!resp.ok) {
-            const data = await resp.json().catch(() => ({}));
-            setStatus(statusEl, data.detail || "工具加载失败", "error");
-            return;
-        }
-        agentToolsData = await resp.json();
-        renderAgentTools();
-        setStatus(statusEl, "工具加载完成，共 " + (agentToolsData.total || 0) + " 个。", "ok");
-    }
-
-    function getAllAgentTools() {
-        const builtin = Array.isArray(agentToolsData.builtin_tools) ? agentToolsData.builtin_tools : [];
-        const custom = Array.isArray(agentToolsData.custom_tools) ? agentToolsData.custom_tools : [];
-        return builtin.concat(custom);
-    }
-
-    function renderAgentTools() {
-        const grid = document.getElementById("agentToolsGrid");
-        if (!grid) return;
-        const tools = getAllAgentTools();
-        if (!tools.length) {
-            grid.innerHTML = '<div class="source-empty">暂无工具配置。</div>';
-            return;
-        }
-        grid.innerHTML = tools.map((tool) => renderAgentToolCard(tool)).join("");
-    }
-
-    function renderAgentToolCard(tool) {
-        const name = String(tool.name || "");
-        const safeName = escapeHtml(name);
-        const params = tool.parameters && typeof tool.parameters === "object" ? tool.parameters : {};
-        const paramText = Object.keys(params).length ? Object.keys(params).join("、") : "无参数";
-        const kind = tool.kind === "custom" ? "自定义" : "内置";
-        const safeToTest = tool.safe_to_test !== false;
-        const executor = tool.executor && typeof tool.executor === "object" ? tool.executor : {};
-        const executorText = tool.kind === "custom"
-            ? `执行器：${executor.type ? escapeHtml(String(executor.type).toUpperCase()) : "未配置"}`
-            : "";
-        return `
-            <div class="prompt-card tool-card">
-                <h4>${escapeHtml(tool.title || name)} <span class="prompt-key">(${safeName})</span></h4>
-                <div class="prompt-group-name">${kind}工具 · ${tool.enabled === false ? "停用" : "启用"}</div>
-                <p>${escapeHtml(tool.description || "暂无描述")}</p>
-                <div class="tool-param-line">参数：${escapeHtml(paramText)}</div>
-                ${executorText ? `<div class="tool-param-line">${executorText}</div>` : ""}
-                <div class="prompt-actions">
-                    <button class="admin-btn small" data-action="open-agent-tool-test" data-tool-name="${safeName}">${safeToTest ? "测试" : "查看"}</button>
-                    ${tool.kind === "custom" ? `<button class="admin-btn small" data-action="open-agent-tool-modal" data-tool-name="${safeName}">编辑</button><button class="admin-btn danger small" data-action="delete-agent-tool" data-tool-name="${safeName}">删除</button>` : ""}
-                </div>
-            </div>
-        `;
-    }
-
-    function getAgentToolByName(name) {
-        return getAllAgentTools().find((item) => item.name === name);
-    }
-
-    function buildDefaultToolArgs(tool) {
-        const args = {};
-        const params = tool && tool.parameters && typeof tool.parameters === "object" ? tool.parameters : {};
-        Object.entries(params).forEach(([key, meta]) => {
-            if (meta && typeof meta === "object" && "default" in meta) args[key] = meta.default;
-        });
-        if (tool?.name === "search_news" && !args.q) args.q = "热点";
-        if (tool?.name === "get_news_detail" && !args.news_id) args.news_id = 1;
-        if (tool?.name === "get_topic_detail" && !args.topic_id) args.topic_id = 1;
-        if (tool?.name === "get_term_analysis" && !args.term) args.term = "中国";
-        if (tool?.name === "web_search" && !args.q) args.q = "TrendSonar 新闻";
-        if (tool?.name === "web_crawl_page" && !args.url) args.url = "https://example.com";
-        if (tool?.name === "generate_news_image") {
-            if (!args.title) args.title = "TrendSonar 新闻图片";
-            if (!args.body) args.body = "这里是一段用于测试图片生成工具的新闻摘要。";
-        }
-        return args;
-    }
-
-    function openAgentToolTest(name) {
-        const tool = getAgentToolByName(name);
-        const output = document.getElementById("agentToolTestOutput");
-        if (!tool || !output) return;
-        const args = agentToolTestArgs[name] || buildDefaultToolArgs(tool);
-        agentToolTestArgs[name] = args;
-        output.classList.remove("is-hidden");
-        output.innerHTML = `
-            <div class="tool-test-head">
-                <strong>${escapeHtml(tool.title || name)}</strong>
-                <span>${escapeHtml(name)}</span>
-            </div>
-            <textarea id="agentToolTestArgs" class="admin-textarea" rows="8">${escapeHtml(JSON.stringify(args, null, 2))}</textarea>
-            <div class="tool-test-actions">
-                <button class="admin-btn primary" data-action="run-agent-tool-test" data-tool-name="${escapeHtml(name)}">${tool.safe_to_test === false ? "查看限制" : "运行测试"}</button>
-            </div>
-            <pre id="agentToolTestResult" class="tool-test-result"></pre>
-        `;
-        output.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-
-    async function runAgentToolTest(name) {
-        const resultEl = document.getElementById("agentToolTestResult");
-        const argsEl = document.getElementById("agentToolTestArgs");
-        if (!resultEl || !argsEl) return;
-        let args = {};
-        try {
-            args = JSON.parse(argsEl.value || "{}");
-        } catch (e) {
-            resultEl.textContent = "参数不是合法 JSON: " + e.message;
-            return;
-        }
-        agentToolTestArgs[name] = args;
-        resultEl.textContent = "测试中...";
-        const resp = await fetch("/api/admin/agent_tools/test", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, args })
-        });
-        const data = await resp.json().catch(() => ({}));
-        resultEl.textContent = JSON.stringify(data, null, 2);
-    }
-
-    function openAgentToolModal(name = "") {
-        const tool = name ? getAgentToolByName(name) : null;
-        document.getElementById("agentToolModalTitle").textContent = tool ? "编辑工具" : "新增工具";
-        document.getElementById("agentToolName").value = tool?.name || "";
-        document.getElementById("agentToolName").readOnly = !!tool;
-        document.getElementById("agentToolTitle").value = tool?.title || "";
-        document.getElementById("agentToolDescription").value = tool?.description || "";
-        document.getElementById("agentToolParameters").value = JSON.stringify(tool?.parameters || {}, null, 2);
-        document.getElementById("agentToolExecutor").value = JSON.stringify(tool?.executor || {}, null, 2);
-        document.getElementById("agentToolPromptHint").value = tool?.prompt_hint || "";
-        document.getElementById("agentToolEnabled").checked = tool?.enabled !== false;
-        updateAgentToolExamplePanel(!tool);
-        document.getElementById("agentToolModal").classList.remove("is-hidden");
-    }
-
-    function updateAgentToolExamplePanel(visible) {
-        const panel = document.getElementById("agentToolExamplePanel");
-        const code = document.getElementById("agentToolExampleCode");
-        if (!panel || !code) return;
-        panel.classList.toggle("is-hidden", !visible);
-        code.textContent = JSON.stringify({
-            ...AGENT_TOOL_EXAMPLES.searxng,
-            enabled: true
-        }, null, 2);
-    }
-
-    function fillAgentToolExample(key) {
-        const example = AGENT_TOOL_EXAMPLES[key];
-        if (!example) return;
-        document.getElementById("agentToolName").value = example.name;
-        document.getElementById("agentToolTitle").value = example.title;
-        document.getElementById("agentToolDescription").value = example.description;
-        document.getElementById("agentToolParameters").value = JSON.stringify(example.parameters, null, 2);
-        document.getElementById("agentToolExecutor").value = JSON.stringify(example.executor, null, 2);
-        document.getElementById("agentToolPromptHint").value = example.prompt_hint;
-        document.getElementById("agentToolEnabled").checked = true;
-    }
-
-    function closeAgentToolModal() {
-        const modal = document.getElementById("agentToolModal");
-        if (modal) modal.classList.add("is-hidden");
-    }
-
-    async function saveAgentTool() {
-        const statusEl = document.getElementById("adminStatus");
-        let parameters = {};
-        let executor = {};
-        try {
-            parameters = JSON.parse(document.getElementById("agentToolParameters")?.value || "{}");
-        } catch (e) {
-            alert("参数 JSON 不合法: " + e.message);
-            return;
-        }
-        try {
-            executor = JSON.parse(document.getElementById("agentToolExecutor")?.value || "{}");
-        } catch (e) {
-            alert("执行器 JSON 不合法: " + e.message);
-            return;
-        }
-        const payload = {
-            name: document.getElementById("agentToolName")?.value || "",
-            title: document.getElementById("agentToolTitle")?.value || "",
-            description: document.getElementById("agentToolDescription")?.value || "",
-            parameters,
-            executor,
-            prompt_hint: document.getElementById("agentToolPromptHint")?.value || "",
-            enabled: !!document.getElementById("agentToolEnabled")?.checked,
-        };
-        setStatus(statusEl, "保存工具中...", "");
-        const resp = await fetch("/api/admin/agent_tools/custom", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) {
-            setStatus(statusEl, data.detail || "工具保存失败", "error");
-            return;
-        }
-        closeAgentToolModal();
-        setStatus(statusEl, "工具已保存", "ok");
-        await loadAgentTools();
-    }
-
-    async function deleteAgentTool(name) {
-        if (!confirm("确定删除这个自定义工具吗？")) return;
-        const statusEl = document.getElementById("adminStatus");
-        const resp = await fetch("/api/admin/agent_tools/custom/" + encodeURIComponent(name), { method: "DELETE" });
-        if (!resp.ok) {
-            const data = await resp.json().catch(() => ({}));
-            setStatus(statusEl, data.detail || "删除失败", "error");
-            return;
-        }
-        setStatus(statusEl, "工具已删除", "ok");
-        await loadAgentTools();
-    }
-
-    async function openAgentPromptEditor() {
-        if (!Object.keys(allPrompts || {}).length) {
-            await loadPrompts();
-        }
-        if (allPrompts.agent_system) {
-            editPrompt("agent_system");
-            return;
-        }
-        setStatus(document.getElementById("adminStatus"), "未找到 agent_system 提示词，请检查默认提示词配置。", "error");
-    }
-
     document.addEventListener("DOMContentLoaded", () => {
         if (!authed) {
             document.getElementById("adminLoginBtn")?.addEventListener("click", doLogin);
@@ -1700,12 +1385,8 @@ const adminPageData = adminPageDataEl ? JSON.parse(adminPageDataEl.textContent |
         document.getElementById("tabSourcesBtn")?.addEventListener("click", () => setTab("sources"));
         document.getElementById("tabLogsBtn")?.addEventListener("click", () => setTab("logs"));
         document.getElementById("tabPromptsBtn")?.addEventListener("click", () => setTab("prompts"));
-        document.getElementById("tabToolsBtn")?.addEventListener("click", () => setTab("tools"));
 
         document.getElementById("refreshPromptsBtn")?.addEventListener("click", loadPrompts);
-        document.getElementById("refreshAgentToolsBtn")?.addEventListener("click", loadAgentTools);
-        document.getElementById("addAgentToolBtn")?.addEventListener("click", () => openAgentToolModal());
-        document.getElementById("editAgentPromptBtn")?.addEventListener("click", openAgentPromptEditor);
 
         document.getElementById("refreshLogsBtn")?.addEventListener("click", async () => {
             await refreshLogFiles(true);
@@ -1739,10 +1420,6 @@ const adminPageData = adminPageDataEl ? JSON.parse(adminPageDataEl.textContent |
         document.getElementById("saveSourceFormBtn")?.addEventListener("click", saveSourceForm);
         document.getElementById("closeSourcePreviewModalBtn")?.addEventListener("click", closeSourcePreviewModal);
         document.getElementById("closeSourcePreviewFooterBtn")?.addEventListener("click", closeSourcePreviewModal);
-        document.getElementById("closeAgentToolModalBtn")?.addEventListener("click", closeAgentToolModal);
-        document.getElementById("cancelAgentToolBtn")?.addEventListener("click", closeAgentToolModal);
-        document.getElementById("saveAgentToolBtn")?.addEventListener("click", saveAgentTool);
-        document.getElementById("fillSearxngExampleBtn")?.addEventListener("click", () => fillAgentToolExample("searxng"));
 
         const logViewer = document.getElementById("logViewer");
         if (logViewer) logViewer.addEventListener("scroll", onLogScroll);
@@ -1773,22 +1450,6 @@ const adminPageData = adminPageDataEl ? JSON.parse(adminPageDataEl.textContent |
             }
             if (action === "test-source-content") {
                 testSourceContent(Number(actionEl.dataset.sourceIndex || 0), Number(actionEl.dataset.previewIndex || 0));
-                return;
-            }
-            if (action === "open-agent-tool-test") {
-                openAgentToolTest(actionEl.dataset.toolName || "");
-                return;
-            }
-            if (action === "open-agent-tool-modal") {
-                openAgentToolModal(actionEl.dataset.toolName || "");
-                return;
-            }
-            if (action === "delete-agent-tool") {
-                deleteAgentTool(actionEl.dataset.toolName || "");
-                return;
-            }
-            if (action === "run-agent-tool-test") {
-                runAgentToolTest(actionEl.dataset.toolName || "");
                 return;
             }
             if (action === "test-ai-model") {

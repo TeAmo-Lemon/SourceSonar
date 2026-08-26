@@ -20,7 +20,7 @@ body.page-index .btn-icon { padding: 8px; border-radius: 10px; color: var(--text
 
 body.page-index .btn-icon:hover { background-color: var(--bg-soft); }
 
-body.page-index .btn-primary { background-color: var(--primary-color); color: #fff; padding: 10px 20px; border-radius: 10px; font-weight: 700; width: 100%; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2); }
+body.page-index .btn-primary { background-color: var(--primary-color); color: #fff; padding: 10px 20px; border-radius: 10px; font-weight: 700; width: 100%; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.2); }
 
 body.page-index .btn-primary:active { opacity: 0.92; }
 
@@ -119,10 +119,10 @@ body.page-index .flex-1 { flex: 1; }
 :is(body.page-index, body.page-report, body.page-graph) .detail-meta-line > a:not(:last-child)::after { content: '·'; margin-left: 12px; color: var(--text-light);
 }
 
-:is(body.page-index, body.page-report, body.page-graph) .detail-source-link { color: #2563eb; font-weight: 700; text-decoration: none;
+:is(body.page-index, body.page-report, body.page-graph) .detail-source-link { color: #4f46e5; font-weight: 700; text-decoration: none;
 }
 
-:is(body.page-index, body.page-report, body.page-graph) .detail-source-link:hover { color: #1d4ed8; text-decoration: underline; text-underline-offset: 3px;
+:is(body.page-index, body.page-report, body.page-graph) .detail-source-link:hover { color: #4338ca; text-decoration: underline; text-underline-offset: 3px;
 }
 
 :is(body.page-index, body.page-report, body.page-graph) .detail-meta-line .meta-heat-val { color: var(--heat-hot); font-weight: 650;
@@ -250,52 +250,7 @@ body.page-topics.page-topic-detail .trend-metric-label { color: var(--text-secon
     :is(body.page-index, body.page-report, body.page-graph) .detail-two-col { grid-template-columns: 1fr;}
 }
 
-body.page-index .chat-widget-btn { position: fixed; border-radius: 999px; display: flex; align-items: center; justify-content: center; z-index: 100; }
-
-body.page-index .chat-window { position: fixed; bottom: 90px; right: 20px; display: none; flex-direction: column; z-index: 100; border: 1px solid var(--border-color); overflow: hidden; }
-
-body.page-index .chat-window.show { display: flex; }
-
-body.page-index .chat-header { padding: 12px 16px; color: #fff; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
-
-body.page-index .chat-header-controls { display: flex; gap: 8px; align-items: center; }
-
-body.page-index .chat-switch { border: 0; color: #fff; font-size: 0.75rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 999px; cursor: pointer; user-select: none; }
-
-body.page-index .chat-switch.active { background: #fff; color: var(--primary-color); font-weight: 800; }
-
-body.page-index .chat-close { border: 0; background: transparent; color: #fff; font-size: 1.2rem; line-height: 1; cursor: pointer; }
-
-body.page-index .chat-messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;}
-
-body.page-index .message { max-width: 85%; padding: 8px 12px; border-radius: 12px; font-size: 0.9rem; line-height: 1.5; word-wrap: break-word; }
-
-body.page-index .message.user { align-self: flex-end; background: var(--primary-color); color: #fff; border-bottom-right-radius: 4px; }
-
-body.page-index .message.ai { align-self: flex-start; background: var(--bg-card); border: 1px solid var(--border-color); border-bottom-left-radius: 4px; }
-
-body.page-index .message.ai ol, body.page-index .message.ai ul { padding-left: 20px; margin: 4px 0; }
-
-body.page-index .message.ai p { margin: 4px 0; }
-
-body.page-index .chat-input-area { padding: 12px; border-top: 1px solid var(--border-color); background: var(--bg-card); display: flex; gap: 8px; flex-direction: column; }
-
-body.page-index .chat-quick-questions { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-
-body.page-index .chat-chip { white-space: nowrap; font-size: 0.78rem; padding: 4px 10px; border-radius: 999px; cursor: pointer;}
-
-body.page-index .chat-input-row { display: flex; gap: 8px; width: 100%; }
-
-body.page-index .chat-input { flex: 1; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 999px; outline: none; font-size: 0.9rem; background: var(--bg-card); color: var(--text-main); }
-
-body.page-index .chat-input:focus { border-color: color-mix(in srgb, var(--border-color) 60%, var(--primary-color)); box-shadow: 0 0 0 3px var(--primary-light); }
-
-body.page-index .chat-send { color: var(--primary-color); font-weight: 750; font-size: 0.9rem; }
-
-body.page-index .chat-send:disabled { color: var(--text-light); cursor: not-allowed; }
-
-@media (max-width: 480px) { body.page-index .chat-window { width: 100%; height: 100%; bottom: 0; right: 0; border-radius: 0; }
-    body.page-index .chat-widget-btn { bottom: 80px; }
+@media (max-width: 480px) {
     body.page-index .meta-right { width: 100%; margin-left: 0; justify-content: space-between; margin-top: 4px; }
 }
 
@@ -388,17 +343,6 @@ html[data-theme="dark"] body.page-index .input-date { box-shadow: none;
 body.page-index .loading-state { display: flex; align-items: center; justify-content: center; min-height: 72px; border: 1px dashed color-mix(in srgb, var(--border-color) 70%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--bg-card) 82%, transparent);
 }
 
-body.page-index .chat-widget-btn { animation: softPulse 2.6s ease-in-out infinite;
-}
-
-body.page-index .chat-window { width: 380px; height: 540px; border-radius: 24px; border-color: color-mix(in srgb, var(--border-color) 68%, transparent); box-shadow: 0 28px 60px rgba(15, 23, 42, 0.16); background: color-mix(in srgb, var(--bg-card) 96%, white);
-}
-
-body.page-index .chat-messages { background:
-        radial-gradient(circle at top right, color-mix(in srgb, var(--primary-color) 10%, transparent), transparent 34%),
-        var(--bg-soft);
-}
-
 :is(body.page-index, body.page-report, body.page-graph) .news-detail-panel,
 body.page-report .term-analysis-panel,
 body.page-report .modal-content { border-radius: 24px; box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
@@ -454,12 +398,6 @@ body.page-topics .topics-more-btn,
 body.page-topics .topics-ghost-btn,
 body.page-topics .topics-icon-btn,
 body.page-report .chart-filter { font-weight: 800;
-}
-
-body.page-index .chat-widget-btn::before { font-size: 0.9rem; font-weight: 900; letter-spacing: 0.03em;
-}
-
-body.page-index .chat-chip { border: 1px solid color-mix(in oklch, var(--primary-color) 20%, var(--border-color)); background: color-mix(in oklch, var(--primary-color) 8%, var(--bg-card));
 }
 
 body.page-index .news-detail-panel,
@@ -520,8 +458,6 @@ body.page-report .news-detail-panel { width: min(920px, calc(100vw - 28px));
 
     body.page-report #hotNewsList.news-list { padding: 14px;}
 
-    body.page-index .chat-window { width: 100%; height: 100%; bottom: 0; right: 0; border-radius: 0;}
-
     body.page-topics .topics-hero,
     body.page-topics .topic-card-head,
     body.page-topics .topic-card-footer { grid-template-columns: 1fr; flex-direction: column;}
@@ -561,20 +497,6 @@ body.page-topics .tag-heat { background: var(--heat-light); border-color: color-
 }
 
 body.page-index .btn-filter[data-sort="heat"].active { color: var(--heat-color); box-shadow: none;
-}
-
-body.page-index .chat-widget-btn::before { width: 22px; height: 22px; border-radius: 50%; background:
-        radial-gradient(circle at 68% 70%, transparent 0 5px, #fff 5.5px 6px, transparent 6.5px),
-        #fff;
-}
-
-body.page-index .chat-widget-btn { font-size: 0;
-}
-
-body.page-index .chat-header { background: linear-gradient(180deg, var(--primary-color), var(--primary-hover));
-}
-
-body.page-index .chat-chip { color: var(--primary-color);
 }
 
 @media (min-width: 1280px) { body.page-index .container,
@@ -624,8 +546,6 @@ body.page-index .chat-chip { color: var(--primary-color);
 }
 
 @media (max-width: 420px) { body.page-report .metrics-grid { grid-template-columns: 1fr;}
-
-    body.page-index .chat-widget-btn { bottom: 72px; right: 14px;}
 }
 
 body.page-index .news-list,
@@ -865,16 +785,6 @@ body.page-index .btn-regen:disabled,
 body.page-index .summary-placeholder .btn-link:disabled { color: var(--text-light); background: transparent;
 }
 
-body.page-index .chat-widget-btn { border: 1px solid color-mix(in srgb, var(--primary-color) 18%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--primary-color) 94%, white), var(--primary-hover)); color: #fff;}
-
-body.page-index .chat-widget-btn::before { content: none;
-}
-
-body.page-index .chat-widget-icon { display: inline-flex; align-items: center; justify-content: center;}
-
-body.page-index .chat-widget-icon svg { display: block;
-}
-
 @media (max-width: 767px) { body.page-index .header-main { gap: 18px;}
 
     body.page-index .header-main .nav-links { gap: 14px;}
@@ -1024,7 +934,7 @@ body.page-index .news-meta-row .meta-right { gap: 10px;
 body.page-index .news-meta-item { min-height: 16px; font-size: 0.74rem;
 }
 
-body.page-index .summary-box { margin-top: 0; padding: 4px 0; border-radius: 10px; font-size: 0.88rem; line-height: 1.65; color: gray;
+body.page-index .summary-box { margin-top: 0; padding: 4px 0; border-radius: 10px; font-size: 0.88rem; line-height: 1.65; color: var(--text-secondary);
 }
 
 body.page-index .summary-box p { margin-top: 0; margin-bottom: 0;
@@ -1034,109 +944,6 @@ body.page-index .summary-content + .btn-link,
 body.page-index .summary-content + .btn-link + .btn-link,
 body.page-index .summary-placeholder .btn-link,
 body.page-index .btn-regen { margin-top: 0; font-size: 0.78rem;
-}
-
-body.page-index .chat-widget-btn { right: 22px; bottom: 22px; width: 40px; height: 40px; box-shadow: 0 10px 24px color-mix(in srgb, var(--primary-color) 24%, transparent);
-}
-
-body.page-index .chat-widget-icon { width: 18px; height: 18px;
-}
-
-body.page-index .chat-widget-icon svg { width: 18px; height: 18px;
-}
-
-body.page-index .message.ai.agent-message { width: min(92%, 620px); max-width: 92%;
-}
-
-body.page-index .agent-status { color: var(--text-light); font-size: 0.82rem;
-}
-
-body.page-index .agent-tool-list { display: flex; flex-direction: column; gap: 6px; margin: 2px 0 8px;
-}
-
-body.page-index .agent-tool { border: 1px solid color-mix(in srgb, var(--primary-color) 16%, var(--border-color)); border-radius: 8px; background: color-mix(in srgb, var(--bg-card) 94%, var(--primary-light)); overflow: hidden;
-}
-
-body.page-index .agent-tool summary { min-height: 30px; padding: 5px 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; font-size: 0.78rem; user-select: none;
-}
-
-body.page-index .agent-tool-name { font-weight: 750; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-body.page-index .agent-tool-status { flex: 0 0 auto; padding: 1px 6px; border-radius: 999px; font-size: 0.7rem; color: var(--text-light); background: var(--bg-soft);
-}
-
-body.page-index .agent-tool-status.agent-tool-running { color: var(--primary-color); background: var(--primary-light);
-}
-
-body.page-index .agent-tool-status.agent-tool-done { color: #047857; background: #d1fae5;
-}
-
-body.page-index .agent-tool-status.agent-tool-failed { color: #b91c1c; background: #fee2e2;
-}
-
-body.page-index .agent-tool pre { margin: 0; padding: 8px; max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word; border-top: 1px solid var(--border-color); color: var(--text-light); font-size: 0.72rem; line-height: 1.45; background: color-mix(in srgb, var(--bg-soft) 70%, var(--bg-card));
-}
-
-body.page-index .agent-answer { min-width: 0;
-}
-
-body.page-index .agent-answer p:first-child { margin-top: 0;
-}
-
-body.page-index .agent-answer p:last-child { margin-bottom: 0;
-}
-
-body.page-index .agent-citation { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; min-height: 16px; margin: 0 1px; padding: 0 4px; border: 1px solid rgba(37, 99, 235, 0.22); border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 0.64rem; font-weight: 760; line-height: 1; vertical-align: 0.08em; cursor: pointer;
-}
-
-body.page-index .agent-citation:hover { background: #dbeafe; border-color: rgba(37, 99, 235, 0.48);
-}
-
-body.page-index .agent-reference-panel,
-body.page-index .agent-suggestions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; justify-content: flex-start; text-align: left;
-}
-
-body.page-index .agent-reference-panel { display: block; margin-top: 14px; border-top: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent); padding-top: 10px;
-}
-
-body.page-index .agent-reference-title { min-height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--bg-card) 96%, var(--bg-soft)); color: var(--text-light); font-size: 0.7rem; font-weight: 760; cursor: pointer; user-select: none; list-style: none;
-}
-
-body.page-index .agent-reference-title::-webkit-details-marker { display: none;
-}
-
-body.page-index .agent-reference-label { display: inline-flex; align-items: center; gap: 5px; min-width: 0;
-}
-
-body.page-index .agent-reference-toggle::after { content: '展开'; color: var(--primary-color); font-size: 0.68rem; font-weight: 760;
-}
-
-body.page-index .agent-reference-panel[open] .agent-reference-toggle::after { content: '收起';
-}
-
-body.page-index .agent-reference-count { min-width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: flex-start; padding: 0 5px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 0.66rem; font-weight: 760;
-}
-
-body.page-index .agent-reference-list { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: 6px;
-}
-
-body.page-index .agent-reference-item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 7px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--bg-card); color: var(--text-secondary); text-align: left; cursor: pointer; font-size: 0.74rem; line-height: 1.35;
-}
-
-body.page-index .agent-reference-item:hover { border-color: rgba(37, 99, 235, 0.32); background: #eff6ff; color: #1d4ed8;
-}
-
-body.page-index .agent-reference-index { flex: 0 0 auto; color: #1d4ed8; font-weight: 780;
-}
-
-body.page-index .agent-clickable-term { cursor: pointer; color: var(--primary-color); font-weight: 780; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px;
-}
-
-body.page-index .agent-suggestion { min-height: 28px; padding: 0 10px; border: 1px solid rgba(37, 99, 235, 0.24); border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 0.78rem; font-weight: 800; text-align: left; cursor: pointer;
-}
-
-body.page-index .agent-suggestion:hover { background: #dbeafe; border-color: rgba(37, 99, 235, 0.46);
 }
 
 body.page-index .term-analysis-modal { position: fixed; inset: 0; z-index: 1250; display: none; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.48); padding: 18px;
@@ -1229,7 +1036,7 @@ body.page-index .term-news-meta { margin-top: 5px; display: flex; flex-wrap: wra
 :is(body.page-index, body.page-report, body.page-graph) .detail-chip-btn { border: 1px solid var(--border-color); cursor: pointer;
 }
 
-:is(body.page-index, body.page-report, body.page-graph) .detail-chip-btn:hover { border-color: rgba(16, 185, 129, 0.32); color: var(--primary-color);
+:is(body.page-index, body.page-report, body.page-graph) .detail-chip-btn:hover { border-color: rgba(79, 70, 229, 0.32); color: var(--primary-color);
 }
 
 @media (max-width: 760px) { body.page-index .term-metrics,
@@ -1257,3 +1064,121 @@ body.page-index .app-header .header-main { display: flex; align-items: center; g
 body.page-index .app-header .nav-links { display: flex; align-items: center; gap: 24px; margin-left: 0;
 }
 
+
+/* ============ SourceSonar 首页重构层：双栏布局（筛选侧栏 + 新闻流） ============ */
+
+body.page-index .container.index-layout { max-width: 1200px; display: grid; grid-template-columns: 1fr; gap: 0; padding-top: 20px;
+}
+
+.index-sidebar { display: none; min-width: 0;
+}
+
+.index-main { min-width: 0;
+}
+
+/* 主栏分类标签与新闻列表 */
+body.page-index .index-main .category-tabs-container { display: flex; width: 100%; max-width: 100%; margin: 2px 0 14px; gap: 4px; padding: 4px; border: 0; border-radius: 999px; background: var(--bg-soft); overflow-x: auto;
+}
+
+body.page-index .index-main .category-tab-item { padding: 7px 14px; border-radius: 999px; font-size: 0.88rem; flex-shrink: 0; margin-bottom: 0;
+}
+
+body.page-index .index-main .category-tab-item::after { content: none;
+}
+
+body.page-index .index-main .category-tab-item:hover { color: var(--text-main); background: color-mix(in srgb, var(--bg-card) 62%, transparent);
+}
+
+body.page-index .index-main .category-tab-item.active { color: var(--primary-color); background: var(--bg-card); box-shadow: var(--shadow-sm);
+}
+
+body.page-index .news-list { gap: 12px; margin-top: 6px;
+}
+
+body.page-index .news-card { padding: 16px 18px; border-radius: 16px;
+}
+
+body.page-index .news-card:hover { transform: translateY(-2px);
+}
+
+body.page-index .news-title { font-size: 1.1rem; line-height: 1.4;
+}
+
+body.page-index .news-meta-row { margin: 4px 0 8px;
+}
+
+body.page-index .summary-box { margin-top: 2px; font-size: 0.9rem; line-height: 1.7; color: color-mix(in srgb, var(--text-secondary) 92%, var(--text-main));
+}
+
+/* 桌面端筛选侧栏（右栏） */
+@media (min-width: 1024px) {
+    body.page-index .container.index-layout { grid-template-columns: minmax(0, 1fr) 290px; gap: 28px; align-items: start;
+    }
+
+    .index-main { grid-column: 1; grid-row: 1;
+    }
+
+    .index-sidebar { display: block; grid-column: 2; grid-row: 1; position: sticky; top: 68px; align-self: start;
+    }
+
+    body.page-index .index-main .category-tabs-container { margin: 2px 0 16px;
+    }
+
+    .sidebar-card { display: flex; flex-direction: column; gap: 20px; padding: 18px; border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent); border-radius: 16px; background: color-mix(in srgb, var(--bg-card) 96%, var(--bg-soft)); box-shadow: var(--shadow-sm);
+    }
+
+    .sidebar-title { display: flex; align-items: center; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--border-color); color: var(--primary-color); font-size: 0.92rem; font-weight: 850; letter-spacing: 0.02em;
+    }
+
+    .sidebar-title svg { color: var(--primary-color);
+    }
+
+    .sidebar-label { margin-bottom: 8px; color: var(--text-secondary); font-size: 0.74rem; font-weight: 800; letter-spacing: 0.04em;
+    }
+
+    .sidebar-search { display: flex; flex-direction: column; gap: 10px;
+    }
+
+    body.page-index .index-sidebar .toolbar-search { width: 100%;
+    }
+
+    body.page-index .index-sidebar .search-input-desktop { width: 100%; height: 40px; padding: 0 14px; border-radius: 10px; font-size: 0.9rem; background: var(--bg-card); border-color: color-mix(in srgb, var(--border-color) 78%, transparent); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    }
+
+    body.page-index .index-sidebar .search-input-desktop:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    .sidebar-search-actions { display: flex; gap: 8px;
+    }
+
+    .sidebar-search-actions .btn-toolbar-action,
+    .sidebar-search-actions .topics-ghost-btn { flex: 1; min-height: 38px; height: 38px; padding: 0 12px; border-radius: 10px; font-size: 0.88rem;
+    }
+
+    body.page-index .sidebar-section .topics-segmented { display: flex; width: 100%; padding: 3px; border-radius: 11px;
+    }
+
+    body.page-index .sidebar-section .topics-filter-btn { flex: 1; min-height: 36px; padding: 0 10px; border-radius: 8px; font-size: 0.86rem;
+    }
+
+    body.page-index .sidebar-section .select-filter { width: 100%; height: 40px; padding: 0 30px 0 12px; border-radius: 10px; font-size: 0.9rem;
+    }
+
+    body.page-index .sidebar-section .toolbar-date-range { display: flex; width: 100%; margin-top: 8px; gap: 6px;
+    }
+
+    body.page-index .sidebar-section .toolbar-date-range .input-date { flex: 1; min-width: 0; height: 38px; padding: 4px 8px; border-radius: 10px; font-size: 0.84rem;
+    }
+
+    body.page-index .sidebar-section .ms-container { width: 100%; max-width: none; min-width: 0;
+    }
+
+    body.page-index .sidebar-section .ms-trigger { width: 100%; height: 40px; padding: 0 30px 0 12px; border-radius: 10px; font-size: 0.9rem;
+    }
+}
+
+/* 平板区间（768-1023px）复用移动端顶部工具条，避免筛选入口空档 */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+    body.page-index .mobile-top-bar { display: flex;
+    }
+}
