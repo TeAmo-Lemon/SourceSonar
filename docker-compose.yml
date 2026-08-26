@@ -1,0 +1,19 @@
+services:
+  rsshub:
+    image: diygod/rsshub:chromium-bundled
+    restart: always
+    ports:
+      - "1200:1200"
+    environment:
+      NODE_ENV: production
+      CACHE_EXPIRE: 1800 # 缓存 30 分钟，减少对平台的请求频率
+      CACHE_CONTENT_EXPIRE: 7200
+
+      # ===== X (Twitter) 配置 =====
+      # 必须是 TWITTER_COOKIE（单数，不要加 S，不要加 _1）
+      TWITTER_AUTH_TOKEN: ''
+
+      # ===== Instagram 配置 =====
+      IG_COOKIE: ""
+      # ===== 可选：代理配置（如果在国内服务器部署） =====
+      PROXY_URI: "http://127.0.0.1:7897"

@@ -34,6 +34,7 @@ from app.api.deps import settings, templates
 from app.core.config import BASE_DIR, CONFIG_PATH, get_missing_config_keys
 from app.core.database import dispose_engine, init_db
 from app.core.logger import configure_logging, setup_logger
+from app.utils.network import get_lan_ip
 from app.services.admin_service import (
     clear_admin_login_failures,
     create_admin_session_token,
@@ -251,6 +252,13 @@ async def admin_logout():
 if __name__ == "__main__":
     log_level = (settings.LOG_LEVEL or "info").lower()
     print(f"📄 配置文件: {CONFIG_PATH}")
+    # 打印本地访问网址，便于直接复制到浏览器打开
+    print(f"🌐 本地访问网址: http://localhost:{settings.PORT}")
+    print(f"🌐 本机回环网址: http://127.0.0.1:{settings.PORT}")
+    lan_ip = get_lan_ip()
+    if lan_ip:
+        # 局域网 IP 存在时额外打印局域网访问网址（供同一局域网内的设备访问）
+        print(f"🌐 局域网访问网址: http://{lan_ip}:{settings.PORT}")
     uvicorn.run(
         "main:app",
         host="0.0.0.0",

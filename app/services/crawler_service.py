@@ -13,6 +13,7 @@ import logging
 import contextlib
 import io
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -138,6 +139,7 @@ class CrawlerService:
         """
 
         self.sources_file = "news_sources.json"
+        self._last_fetch_at: Dict[str, float] = {}
 
     def _default_headers(self, **overrides: str) -> Dict[str, str]:
         headers = dict(DEFAULT_HEADERS)
@@ -541,11 +543,22 @@ class CrawlerService:
         name = source.get("name")
         weight = source.get("weight", 1.0)
 
+        if settings.NEWSAPI_API_KEY and url and "apiKey=API_KEY" in url:
+            url = url.replace("apiKey=API_KEY", f"apiKey={settings.NEWSAPI_API_KEY}")
+
         log_prefix = f"   {prefix}" if prefix else ""
         logger.debug(f"{log_prefix} 正在抓取: {name} ({url})")
 
+        request_headers = self._reddit_headers() if self._is_reddit_url(url) else None
+
+        proxy = None
+        if source.get("proxy") and settings.CRAWLER_PROXY:
+            proxy = settings.CRAWLER_PROXY
+
         try:
-            async with session.get(url, timeout=self._source_fetch_timeout()) as resp:
+            async with session.get(
+                url, headers=request_headers, proxy=proxy, timeout=self._source_fetch_timeout()
+            ) as resp:
                 if resp.status != 200:
                     logger.error(f"抓取失败 {name}: HTTP {resp.status}")
                     return []
@@ -706,13 +719,32 @@ class CrawlerService:
         async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
             tasks = []
             total_sources = len(sources)
+            now = time.time()
+            skipped = []
 
             async def fetch_wrapper(idx, src):
-                return await self.fetch_and_parse(session, src, prefix=f"({idx}/{total_sources})")
+                try:
+                    return await self.fetch_and_parse(session, src, prefix=f"({idx}/{total_sources})")
+                finally:
+                    self._last_fetch_at[str(src.get("address") or src.get("name") or "")] = time.time()
 
             for i, src in enumerate(sources, 1):
-                if src.get("enabled", True):
-                    tasks.append(fetch_wrapper(i, src))
+                if not src.get("enabled", True):
+                    continue
+                interval_minutes = float(src.get("fetch_interval_minutes") or 0)
+                if interval_minutes > 0:
+                    key = str(src.get("address") or src.get("name") or "")
+                    last = self._last_fetch_at.get(key, 0.0)
+                    if now - last < interval_minutes * 60:
+                        skipped.append((src.get("name"), interval_minutes))
+                        continue
+                tasks.append(fetch_wrapper(i, src))
+
+            if skipped:
+                logger.info(
+                    f"   ⏸️ 跳过 {len(skipped)} 个未到抓取间隔的源: "
+                    + ", ".join(f"{name}({int(iv)}min)" for name, iv in skipped)
+                )
 
             results = await asyncio.gather(*tasks)
             for res in results:
@@ -876,6 +908,28 @@ class CrawlerService:
     def _is_weibo_url(self, url: str) -> bool:
         host = urlparse(url).netloc.lower()
         return any(domain in host for domain in ("weibo.com", "weibo.cn"))
+
+    def _is_reddit_url(self, url: str) -> bool:
+        host = urlparse(url).netloc.lower()
+        return any(domain in host for domain in ("reddit.com", "redd.it"))
+
+    def _reddit_headers(self) -> Dict[str, str]:
+        """
+        输入:
+        - 无
+
+        输出:
+        - Reddit 请求头（包含 Cookie，若已配置）
+
+        作用:
+        - Reddit 公开 JSON 接口对未登录请求限流较严，附带会话 Cookie 可降低 403/429 概率。
+        """
+
+        headers = self._default_headers()
+        cookie = (settings.REDDIT_COOKIE or "").strip()
+        if cookie and not cookie.startswith("Example:"):
+            headers["Cookie"] = cookie
+        return headers
 
     def _parse_cookie_header(self, cookie_str: str) -> Dict[str, str]:
         cookies: Dict[str, str] = {}

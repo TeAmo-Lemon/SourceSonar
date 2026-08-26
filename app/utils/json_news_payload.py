@@ -12,7 +12,7 @@ NEWS_CONTAINER_KEYS = ("data", "items", "stories", "news", "list", "results", "a
 TITLE_FIELDS = ("title", "headline", "name")
 LINK_FIELDS = ("url", "link", "share_url", "mobileUrl", "mobile_url", "uri")
 SUMMARY_FIELDS = ("content", "description", "summary", "digest", "desc", "abstract", "brief", "text")
-DATE_FIELDS = ("publish_time", "published_at", "publish_date", "pub_date", "created_at", "updated_at", "time", "date")
+DATE_FIELDS = ("publish_time", "published_at", "publish_date", "pub_date", "created_at", "updated_at", "time", "date", "publishedAt", "created_utc")
 
 
 class NormalizedJsonNewsItem(TypedDict, total=False):
@@ -129,20 +129,21 @@ def extract_json_news_items(payload: Any, *, max_depth: int = 5) -> List[Dict[st
 
         if depth > max_depth:
             return []
-        if _looks_like_news_item(value):
-            return [dict(value)]
         if isinstance(value, list):
             items: List[Dict[str, Any]] = []
             for child in value:
                 items.extend(collect(child, depth + 1))
             return items
         if isinstance(value, dict):
-            items = []
+            items: List[Dict[str, Any]] = []
+            # 优先展开容器键，避免带 title/link 的包装层（如 RSS-JSON 结构）被误判为单条新闻
             for key in NEWS_CONTAINER_KEYS:
-                if key in value:
+                if key in value and isinstance(value[key], (list, dict)):
                     items.extend(collect(value[key], depth + 1))
             if items:
                 return items
+            if _looks_like_news_item(value):
+                return [dict(value)]
             for child in value.values():
                 if isinstance(child, (dict, list)):
                     items.extend(collect(child, depth + 1))

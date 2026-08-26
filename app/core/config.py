@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     CRAWLER_PAGE_TIMEOUT_MS: int = 60000
     CRAWLER_RETRY_ATTEMPTS: int = 2
     CRAWLER_RETRY_DELAY_SECONDS: float = 8.0
+    CRAWLER_PROXY: str = ""
     EMBEDDING_CONCURRENCY: int = 5
     LLM_CONCURRENCY: int = 5
 
@@ -100,6 +101,8 @@ class Settings(BaseSettings):
     SUMMARY_OUTPUT_LENGTH: int = 300
 
     WEIBO_COOKIE: str = ""
+    REDDIT_COOKIE: str = ""
+    NEWSAPI_API_KEY: str = ""
 
     FOLLOW_KEYWORDS: str = ""
     FOLLOW_KEYWORDS_THRESHOLD: float = 0.65

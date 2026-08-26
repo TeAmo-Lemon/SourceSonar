@@ -1,0 +1,176 @@
+[
+    {
+        "name": "Reddit-全站热门",
+        "weight": 1.5,
+        "address": "https://www.reddit.com/r/popular/top.json?t=day",
+        "enabled": true,
+        "proxy": true
+    },
+    {
+        "name": "Reddit-热门版块",
+        "weight": 1.0,
+        "address": "https://www.reddit.com/r/all/hot.json",
+        "enabled": true,
+        "proxy": true
+    },
+    {
+        "name": "Reddit-世界新闻",
+        "weight": 1.0,
+        "address": "https://www.reddit.com/r/worldnews/hot.json",
+        "enabled": true,
+        "proxy": true
+    },
+    {
+        "name": "Reddit-科技",
+        "weight": 1.0,
+        "address": "https://www.reddit.com/r/technology/hot.json",
+        "enabled": true,
+        "proxy": true
+    },
+    {
+        "name":"x热点",
+        "weight": 1.0,
+        "address":"http://localhost:1200/twitter/trends",
+        "enabled": true,
+        "proxy": true
+    },
+    {
+        "name": "ins",
+        "weight": 1.0,
+        "address": "http://localhost:1200/instagram/tags/openai",
+        "enabled": true,
+        "proxy": true
+    },
+    {
+        "name": "财联社-热门",
+        "weight": 1.0,
+        "address": "https://newsnow.busiyi.world/api/s?id=cls-hot",
+        "enabled": false
+    },
+    {
+        "name": "36氪人气榜",
+        "weight": 1.5,
+        "address": "https://newsnow.busiyi.world/api/s?id=36kr-renqi",
+        "enabled": false
+    },
+    {
+        "name": "36氪综和资讯",
+        "weight": 1.0,
+        "address": "https://36kr.com/feed",
+        "enabled": false
+    },
+    {
+        "name": "Readhub-每日早报",
+        "weight": 1.5,
+        "address": "https://rsshub.rssforever.com/readhub/daily",
+        "enabled": false
+    },
+    {
+        "name": "联合早报-国际即时",
+        "weight": 1.0,
+        "address": "https://plink.anyfeeder.com/zaobao/realtime/world",
+        "enabled": true
+    },
+    {
+        "name": "联合早报-中国",
+        "weight": 1.0,
+        "address": "https://plink.anyfeeder.com/zaobao/realtime/china",
+        "enabled": true
+    },
+    {
+        "name": "每日环球视野",
+        "weight": 1.0,
+        "address": "https://plink.anyfeeder.com/idaily/today",
+        "enabled": false
+    },
+    {
+        "name": "纽约时报-中文",
+        "weight": 1.0,
+        "address": "https://plink.anyfeeder.com/nytimes/cn",
+        "enabled": true
+    },
+    {
+        "name": "华尔街日报-中文",
+        "weight": 1.0,
+        "address": "https://plink.anyfeeder.com/wsj/cn",
+        "enabled": true
+    },
+    {
+        "name": "人民网-头条",
+        "weight": 3.0,
+        "address": "https://plink.anyfeeder.com/people",
+        "enabled": false
+    },
+    {
+        "name": "新华网-新华社新闻",
+        "weight": 2.0,
+        "address": "https://plink.anyfeeder.com/newscn/whxw",
+        "enabled": false
+    },
+    {
+        "name": "百度热搜",
+        "weight": 2.0,
+        "address": "https://newsnow.busiyi.world/api/s?id=baidu",
+        "enabled": false
+    },
+    {
+        "name": "微博",
+        "weight": 0.5,
+        "address": "https://newsnow.busiyi.world/api/s?id=weibo",
+        "enabled": false
+    },
+    {
+        "name": "MIT科技评论-本周热榜",
+        "weight": 1.5,
+        "address": "https://plink.anyfeeder.com/mittrchina/hot",
+        "enabled": true
+    },
+    {
+        "name": "知乎日报",
+        "weight": 1.5,
+        "address": "https://plink.anyfeeder.com/zhihu/daily",
+        "enabled": false
+    },
+    {
+        "name": "知乎热榜",
+        "weight": 1.5,
+        "address": "https://newsnow.busiyi.world/api/s?id=zhihu",
+        "enabled": false
+    },
+    {
+        "name": "今日头条",
+        "weight": 1.0,
+        "address": "https://newsnow.busiyi.world/api/s?id=toutiao",
+        "enabled": false
+    },
+    {
+        "name": "哔哩哔哩热搜",
+        "weight": 1.0,
+        "address": "https://newsnow.busiyi.world/api/s?id=bilibili-hot-search",
+        "enabled": false
+    },
+    {
+        "name": "凤凰网",
+        "weight": 1.0,
+        "address": "https://newsnow.busiyi.world/api/s?id=ifeng",
+        "enabled": false
+    },
+    {
+        "name": "腾讯新闻",
+        "weight": 1.0,
+        "address": "https://orz.ai/api/v1/dailynews/?platform=tenxunwang",
+        "enabled": false
+    },
+    {
+        "name": "雪球热榜",
+        "weight": 1.0,
+        "address": "https://orz.ai/api/v1/dailynews/multi?platforms=xueqiu",
+        "enabled": false
+    },
+    {
+        "name": "抖音热榜",
+        "weight": 1.0,
+        "address": "https://orz.ai/api/v1/dailynews/multi?platforms=douyin",
+        "enabled": false
+    }
+]

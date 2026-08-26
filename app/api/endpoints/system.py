@@ -217,6 +217,8 @@ class NewsSourcePayload(BaseModel):
     weight: float = 1.0
     address: str
     enabled: bool = True
+    proxy: bool = False
+    fetch_interval_minutes: float = 0
 
 
 class UpdateSourcesStructuredPayload(BaseModel):
@@ -271,6 +273,8 @@ def _normalize_news_source(raw: dict) -> dict:
         "weight": float(raw.get("weight", 1.0) or 1.0),
         "address": str(raw.get("address") or "").strip(),
         "enabled": bool(raw.get("enabled", True)),
+        "proxy": bool(raw.get("proxy", False)),
+        "fetch_interval_minutes": float(raw.get("fetch_interval_minutes") or 0),
     }
 
 
