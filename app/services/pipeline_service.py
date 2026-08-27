@@ -31,6 +31,7 @@ from app.services.news_title_service import refine_news_title_if_needed
 from app.services.report_service import report_service
 from app.services.task_manager import task_manager
 from app.services.topic_service import topic_service
+from app.utils.news_content_filter import is_blocked_access_item, is_blocked_access_text
 from app.utils.retry import retry_async_result
 from app.utils.summary_material import build_summary_generation_input, get_existing_summary_material
 from app.utils.tools import clean_html_tags
@@ -114,13 +115,18 @@ async def _crawl_content_with_retry(url: str, label: str, min_length: Optional[i
         - 无，闭包读取新闻 URL
 
         输出:
-        - 抓取到的正文；失败返回 None
+        - 抓取到的正文；失败或正文为登录/受限提示时返回 None
 
         作用:
-        - 提供单次正文抓取动作，交给通用重试工具调度。
+        - 提供单次正文抓取动作，交给通用重试工具调度；
+          若抓到的是“需登录/访问受限”提示文本则视为无效，避免污染摘要素材。
         """
 
-        return await crawler_service.crawl_content(url)
+        content = await crawler_service.crawl_content(url)
+        if content and is_blocked_access_text(content):
+            logger.info(f"   ⚠️ 正文为登录/受限提示，忽略该正文: {label}")
+            return None
+        return content
 
     return await retry_async_result(
         crawl_once,
@@ -630,6 +636,57 @@ async def cleanup_old_data() -> None:
         logger.info(f"🗑️ 已删除 {result.rowcount} 条低热新闻数据")
 
 
+async def cleanup_blocked_news(lookback_days: int = 30, max_rows: int = 2000) -> Dict[str, int]:
+    """
+    输入:
+    - `lookback_days`: 只扫描最近 N 天的新闻（默认 30）
+    - `max_rows`: 单次最多扫描条数（默认 2000）
+
+    输出:
+    - `{"scanned": 扫描条数, "deleted": 删除条数}`
+
+    作用:
+    - 清理历史遗留的“无法访问 / 需登录”类无效新闻（登录提示页、图片/附件直链等），
+      避免这类垃圾持续出现在首页热点中；高热度真实新闻受热度保护不会被误删。
+    """
+
+    logger.info(f"🧹 开始清理无法访问/需登录的无效新闻: lookback={lookback_days}天, max_rows={max_rows}")
+    scanned = 0
+    deleted = 0
+    async with AsyncSessionLocal() as db:
+        since = datetime.now() - timedelta(days=max(1, int(lookback_days)))
+        stmt = (
+            select(News.id, News.title, News.summary, News.content, News.url, News.heat_score)
+            .where(News.publish_date >= since)
+            .order_by(desc(News.publish_date))
+            .limit(max(1, int(max_rows)))
+        )
+        rows = (await db.execute(stmt)).mappings().all()
+
+        ids_to_delete: List[int] = []
+        for row in rows:
+            scanned += 1
+            if is_blocked_access_item(
+                row["title"],
+                row["summary"],
+                row["content"],
+                row["url"],
+                heat=row["heat_score"],
+            ):
+                ids_to_delete.append(int(row["id"]))
+
+        for i in range(0, len(ids_to_delete), 200):
+            await db.execute(delete(News).where(News.id.in_(ids_to_delete[i : i + 200])))
+        await db.commit()
+        deleted = len(ids_to_delete)
+
+    if deleted:
+        logger.info(f"🗑️ 已清理 {deleted}/{scanned} 条无法访问/需登录的无效新闻")
+    else:
+        logger.info(f"✅ 无需清理的无效新闻（扫描 {scanned} 条）")
+    return {"scanned": scanned, "deleted": deleted}
+
+
 async def run_pipeline_task(generate_daily: bool = True, run_topic_task: bool = True) -> None:
     """
     输入:
@@ -648,6 +705,10 @@ async def run_pipeline_task(generate_daily: bool = True, run_topic_task: bool = 
             logger.info(f"🚀 开始新一轮全流程任务 (generate_daily={generate_daily}, run_topic_task={run_topic_task})...")
             news_items = await crawler_service.fetch_all_sources()
             await crawler_service.save_raw_news(news_items)
+
+            # 清理历史遗留的“无法访问/需登录”类无效新闻（新抓取的垃圾已在 _process_meta 拦截）
+            if news_items:
+                await cleanup_blocked_news()
 
             await cluster_service.execute_clustering()
 

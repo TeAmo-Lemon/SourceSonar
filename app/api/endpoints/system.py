@@ -28,7 +28,7 @@ from app.models.news import News
 from app.schemas.system import AdminAuth
 from app.services.ai_service import ai_service
 from app.services.admin_service import is_admin_request, load_config_yaml_text, save_config_yaml_text, schedule_restart, verify_admin_password
-from app.services.pipeline_service import background_analyze_all, reanalyze_all_categories, run_manual
+from app.services.pipeline_service import background_analyze_all, cleanup_blocked_news, reanalyze_all_categories, run_manual
 from app.services.source_health_service import source_health_service
 from app.services.task_manager import task_manager
 
@@ -499,6 +499,23 @@ async def api_trigger_crawl():
         progress="手动全流程执行中",
     )
     return {"status": "running" if status.get("running") else status.get("status"), "task": status}
+
+
+@router.post("/admin/cleanup_blocked_news", dependencies=[Depends(verify_admin_access)])
+async def api_cleanup_blocked_news():
+    """
+    输入:
+    - 无
+
+    输出:
+    - 清理结果（扫描条数、删除条数）
+
+    作用:
+    - 手动清理历史遗留的“无法访问/需登录”类无效新闻（登录提示页、图片/附件直链等）
+    """
+
+    result = await cleanup_blocked_news()
+    return {"status": "ok", **result}
 
 
 @router.get("/admin/tasks", dependencies=[Depends(verify_admin_access)])

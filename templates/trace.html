@@ -1,0 +1,123 @@
+{# 本文件渲染“事件溯源”页面：全球新闻雷达 + 事件传播轨迹分析与可视化。 #}
+{% extends "base.html" %}
+{% block title %}事件溯源 - {{ settings.APP_NAME }}{% endblock %}
+{% block head %}
+    <link rel="stylesheet" href="/static/css/pages/trace.css?version=v0.2.0">
+    <script src="/static/echarts.min.js"></script>
+{% endblock %}
+{% block content %}
+
+    <div class="container trace-container">
+        <!-- 溯源操作面板 -->
+        <section class="trace-panel">
+            <div class="trace-panel-head">
+                <div>
+                    <div class="trace-kicker">GLOBAL NEWS RADAR · EVENT TRACE</div>
+                    <h1 class="trace-title">事件溯源</h1>
+                    <p class="trace-desc">从首页热点新闻中选中一个事件/主题，系统将通过 NewsAPI 检索该事件在全球媒体的相关报道，生成「全球新闻雷达」与「事件传播轨迹」分析。</p>
+                </div>
+            </div>
+
+            <div class="trace-form">
+                <div class="trace-input-row">
+                    <input id="traceEventInput" class="input-text" maxlength="200" placeholder="输入事件/主题关键词，如：DeepSeek 开源、某国际峰会、某地地震……">
+                    <button id="traceAnalyzeBtn" class="btn-primary trace-analyze-btn" type="button">开始溯源</button>
+                </div>
+                <div class="trace-options">
+                    <label class="trace-option">
+                        <span>媒体语言</span>
+                        <select id="traceLanguage" class="select-filter">
+                            <option value="zh">中文媒体</option>
+                            <option value="en">英文媒体</option>
+                            <option value="all">全部语言</option>
+                        </select>
+                    </label>
+                    <label class="trace-option">
+                        <span>分析窗口</span>
+                        <select id="traceDays" class="select-filter">
+                            <option value="7">近 7 天</option>
+                            <option value="14" selected>近 14 天</option>
+                            <option value="30">近 30 天</option>
+                        </select>
+                    </label>
+                    <span id="traceQuota" class="trace-quota"></span>
+                </div>
+
+                <div class="trace-hot-section">
+                    <div class="trace-hot-title">从首页热点新闻中选择</div>
+                    <div id="traceHotList" class="trace-hot-list">
+                        <span class="trace-loading">热点加载中...</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 分析结果区 -->
+        <section id="traceResult" class="trace-result is-hidden" aria-live="polite">
+            <div class="trace-result-head">
+                <div>
+                    <div class="trace-result-kicker">分析结果</div>
+                    <h2 id="traceResultTitle" class="trace-result-title">-</h2>
+                </div>
+                <button id="traceAnalyzeAgainBtn" class="btn-primary trace-again-btn" type="button">重新分析</button>
+            </div>
+
+            <div id="traceMetrics" class="trace-metrics"></div>
+
+            <div id="traceNarrative" class="trace-narrative is-hidden"></div>
+
+            <div class="trace-chart-grid">
+                <div class="trace-chart-card">
+                    <div class="trace-chart-head">
+                        <div>
+                            <div class="trace-section-title">全球新闻雷达</div>
+                            <div class="trace-chart-desc">事件报道在媒体 / 国家中的覆盖强度分布</div>
+                        </div>
+                        <div id="radarModeSeg" class="trace-seg" aria-label="雷达图维度切换">
+                            <button type="button" class="active" data-mode="media">按媒体</button>
+                            <button type="button" data-mode="country">按国家</button>
+                        </div>
+                    </div>
+                    <div id="radarChart" class="trace-chart"></div>
+                </div>
+                <div class="trace-chart-card">
+                    <div class="trace-section-title">报道热度走势</div>
+                    <div class="trace-chart-desc">每日报道量与累计报道量</div>
+                    <div id="trendChart" class="trace-chart"></div>
+                </div>
+                <div class="trace-chart-card full">
+                    <div class="trace-chart-head">
+                        <div>
+                            <div class="trace-section-title">事件传播轨迹</div>
+                            <div class="trace-chart-desc">纵轴为媒体 / 国家（按首次报道时间排序，首发在最下），横轴为时间；涟漪点为该媒体首发报道</div>
+                        </div>
+                        <div id="spreadModeSeg" class="trace-seg" aria-label="传播轨迹维度切换">
+                            <button type="button" class="active" data-mode="media">按媒体</button>
+                            <button type="button" data-mode="country">按国家</button>
+                        </div>
+                    </div>
+                    <div id="spreadChart" class="trace-chart spread"></div>
+                </div>
+                <div class="trace-chart-card">
+                    <div class="trace-section-title">来源分布 Top</div>
+                    <div class="trace-chart-desc">报道量最高的媒体来源</div>
+                    <div id="sourceChart" class="trace-chart"></div>
+                </div>
+                <div class="trace-chart-card">
+                    <div class="trace-section-title">传播里程碑</div>
+                    <div id="milestoneList" class="trace-milestones"></div>
+                </div>
+            </div>
+
+            <div class="trace-articles-section">
+                <div class="trace-section-title">相关报道列表</div>
+                <div class="trace-chart-desc">来自 NewsAPI 的全球媒体报道（按时间倒序，最多 100 条）</div>
+                <div id="traceArticleList" class="trace-article-list"></div>
+            </div>
+        </section>
+    </div>
+
+{% endblock %}
+{% block scripts %}
+    <script src="/static/js/pages/trace.js?version=v0.2.0"></script>
+{% endblock %}

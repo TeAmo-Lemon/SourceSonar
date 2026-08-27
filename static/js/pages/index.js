@@ -314,6 +314,11 @@
                 .replace(/'/g, "&#39;");
         }
 
+        // 对 HTML 属性里的文本做转义（同时压缩换行，避免 title 换行破坏属性）。
+        function attrEscape(text) {
+            return escapeHtml(String(text || "").replace(/[\r\n]+/g, " "));
+        }
+
         function sentimentClass(label) {
             const v = String(label || "").trim();
             if (v === "正面") return "sent-pos";
@@ -908,6 +913,7 @@
                     <span>${time}</span>
                     <span class="meta-heat-val">热度 ${Number(news.heat || 0).toFixed(1)}</span>
                     <span class="meta-sent-val ${sentimentClass(news.sentiment_label)}">${escapeHtml(news.sentiment_label || '未分析')}${news.sentiment_score !== undefined ? '：' + news.sentiment_score : ''}</span>
+                    <button class="btn-link" type="button" data-action="trace-event" data-news-id="${news.id}" data-title="${attrEscape(news.title)}">溯源分析</button>
                 </div>
                 <div class="detail-status-grid">
                     <div><strong>${status.has_summary ? '已有摘要' : '暂无摘要'}</strong><span>新闻摘要</span></div>
@@ -1119,6 +1125,7 @@
                                 <div class="meta-right">
                                     <span class="news-meta-item meta-time">${timeStr}</span>
                                     <span class="news-meta-item meta-action" role="button" tabindex="0" data-action="open-news-detail" data-news-id="${item.id}">详情</span>
+                                    <span class="news-meta-item meta-action meta-trace" role="button" tabindex="0" data-action="trace-event" data-news-id="${item.id}" data-title="${attrEscape(item.title)}">溯源</span>
                                 </div>
                             </div>
                             <div class="summary-box" id="summary-${item.id}">
@@ -1337,6 +1344,15 @@
             }
             if (action === 'open-news-detail') {
                 openNewsDetail(Number(actionEl.dataset.newsId || 0), { replace: actionEl.dataset.replace === 'true' });
+                return;
+            }
+            if (action === 'trace-event') {
+                const id = Number(actionEl.dataset.newsId || 0);
+                const title = actionEl.dataset.title || '';
+                const params = new URLSearchParams();
+                if (id) params.set('news_id', id);
+                if (title) params.set('event', title);
+                window.location.href = `/trace?${params.toString()}`;
                 return;
             }
             if (action === 'term-range') {

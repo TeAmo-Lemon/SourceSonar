@@ -37,6 +37,7 @@ from app.utils.json_news_payload import (
     extract_json_news_items,
     normalize_json_news_item,
 )
+from app.utils.news_content_filter import is_blocked_access_item
 from app.utils.tools import clean_html_tags
 
 settings = get_settings()
@@ -507,7 +508,12 @@ class CrawlerService:
         for domain in settings.IGNORED_DOMAINS:
             if domain in url:
                 return None
-        
+
+        # 过滤“无法访问/需登录”类无效内容（如被墙站点的登录提示页、图片/附件直链等）
+        if is_blocked_access_item(title, summary, content, url):
+            logger.info(f"🚫 过滤无法访问/需登录的无效条目: source={source_name}, title={str(title)[:40]}")
+            return None
+
         # 清洗来源自带文本中的坏链
         cleaned_summary = self._clean_summary(summary)
         cleaned_content = self._clean_summary(content)

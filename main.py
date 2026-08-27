@@ -163,6 +163,32 @@ async def page_topics(request: Request):
     )
 
 
+@app.get("/trace", response_class=HTMLResponse)
+async def page_trace(request: Request):
+    """
+    输入:
+    - `request`: FastAPI 请求对象
+
+    输出:
+    - 事件溯源页面 HTML 响应
+
+    作用:
+    - 渲染“全球新闻雷达 + 事件传播轨迹”溯源分析页面。
+    """
+
+    missing_keys = get_missing_config_keys(settings)
+    return templates.TemplateResponse(
+        "trace.html",
+        {
+            "request": request,
+            "settings": settings,
+            "active_page": "trace",
+            "missing_keys": missing_keys,
+            "db_error": DB_INIT_ERROR,
+        },
+    )
+
+
 @app.get("/topics/{topic_id}", response_class=HTMLResponse)
 async def page_topic_detail(topic_id: int, request: Request):
     missing_keys = get_missing_config_keys(settings)
