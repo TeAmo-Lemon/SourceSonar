@@ -24,7 +24,7 @@ from app.services.news_title_service import refine_news_title_if_needed
 from app.services.topic_discovery_service import TopicDiscoveryService
 from app.utils.retry import retry_async_result
 from app.utils.summary_material import build_summary_generation_input, get_existing_summary_material
-from app.utils.tools import clean_html_tags
+from app.utils.tools import clean_html_tags, cosine_similarity
 
 settings = get_settings()
 logger = setup_logger("TopicService")
@@ -37,15 +37,8 @@ class TopicService:
 
     @staticmethod
     def _cosine_similarity(a: List[float], b: List[float]) -> float:
-        if not a or not b:
-            return 0.0
-        va = np.array(a, dtype=np.float32)
-        vb = np.array(b, dtype=np.float32)
-        na = float(np.linalg.norm(va))
-        nb = float(np.linalg.norm(vb))
-        if na <= 0 or nb <= 0:
-            return 0.0
-        return float(np.dot(va, vb) / (na * nb))
+        """输入两个向量，输出余弦相似度；委托给公共工具统一计算。"""
+        return cosine_similarity(a, b)
 
     async def _load_used_news_ids(self, db: AsyncSession, active_only: bool = False) -> Set[int]:
         """
@@ -1285,26 +1278,8 @@ class TopicService:
 
         # 如果缺失，尝试抓取内容
         if (not cleaned_content or len(cleaned_content) < 50) and not existing_summary:
-            async def crawl_once() -> Optional[str]:
-                """
-                输入:
-                - 无，闭包读取新闻 URL
-
-                输出:
-                - 抓取到的正文；失败返回 None
-
-                作用:
-                - 为摘要补全正文提供一次抓取动作。
-                """
-
-                return await crawler_service.crawl_content(news.url)
-
-            content = await retry_async_result(
-                crawl_once,
-                attempts=max(1, int(getattr(settings, "CRAWLER_RETRY_ATTEMPTS", 2) or 2)),
-                delay_seconds=max(1.0, float(getattr(settings, "CRAWLER_RETRY_DELAY_SECONDS", 8.0) or 8.0)),
-                per_attempt_timeout_seconds=max(5.0, float(getattr(settings, "CRAWLER_FETCH_TIMEOUT_SECONDS", 45.0) or 45.0)),
-                min_valid_length=max(10, int(getattr(settings, "CRAWLER_CONTENT_MIN_LENGTH", 30) or 30)),
+            content = await crawler_service.crawl_with_retry(
+                news.url,
                 label=f"摘要正文补抓({news.id})",
             )
             if content:

@@ -15,7 +15,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
-from app.core.config import BASE_DIR, get_settings
+from app.core.config import get_news_sources_path_candidates, get_settings
 from app.core.database import AsyncSessionLocal
 from app.core.logger import setup_logger
 from app.models.news import News
@@ -84,13 +84,10 @@ class ClusteringService:
         - 可能的新闻源配置文件路径列表（按优先级）
 
         作用:
-        - 读取新闻源权重时，兼容 `data/` 与项目根目录两种放置方式
+        - 兼容 `data/` 与项目根目录两种放置方式
         """
 
-        return [
-            BASE_DIR / "data" / "news_sources.json",
-            BASE_DIR / "news_sources.json",
-        ]
+        return get_news_sources_path_candidates("news_sources.json")
 
     def _refresh_source_weight_cache(self) -> None:
         """

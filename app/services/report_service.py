@@ -6,14 +6,12 @@
 """
 
 import gc
-import asyncio
 import re
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from time import monotonic
 from typing import Any, Dict, List, Optional, Tuple, AsyncIterator
 
-import numpy as np
 from sqlalchemy import and_, case, cast, delete, desc, extract, func, literal, or_, select, true
 from sqlalchemy.orm import defer
 from sqlalchemy.dialects.postgresql import JSONB
@@ -26,6 +24,83 @@ from app.core.prompts import prompt_manager
 from app.models.news import News
 from app.models.report import ReportCache
 from app.utils.news_ranking import get_news_field, normalize_datetime, sort_news_by_composite_score
+
+
+def compact_text(text: Any, max_len: int = 180) -> str:
+    """
+    输入:
+    - `text`: 待压缩文本
+    - `max_len`: 最大长度
+
+    输出:
+    - 去掉换行并截断后的文本
+
+    作用:
+    - 统一压缩用于 AI 提示词的新闻标题/正文/来源字段。
+    """
+
+    t = (text or "").replace("\r", " ").replace("\n", " ").strip()
+    if len(t) > max_len:
+        return t[:max_len] + "…"
+    return t
+
+
+def build_report_news_lines(ai_rows: Any) -> list[str]:
+    """
+    输入:
+    - `ai_rows`: 查询得到的新闻行（含 title/content/summary/heat/source/url/publish_date）
+
+    输出:
+    - 供报告提示词使用的新闻文本行列表
+
+    作用:
+    - 统一生成报告样本行的格式，消除各方法中重复的循环逻辑。
+    """
+
+    news_lines: list[str] = []
+    for idx, (title, content, summary, heat, src, url, pub_dt) in enumerate(ai_rows, start=1):
+        body = content if content else summary
+        body_str = compact_text(body, 220)
+        title_str = compact_text(title, 80)
+        src_str = compact_text(src, 30)
+        time_str = pub_dt.isoformat() if pub_dt else ""
+        news_lines.append(
+            f"{idx}. [热度:{(heat or 0):.1f}] [{src_str}] {title_str}\n   时间: {time_str}\n   正文: {body_str}\n   链接: {url}"
+        )
+    return news_lines
+
+
+def build_report_ai_prompt(*, keyword: Optional[str], time_range_label: str, scope_str: str, news_lines: list[str]) -> str:
+    """
+    输入:
+    - `keyword`: 关键词（为空表示全局报告）
+    - `time_range_label`: 时间范围标签
+    - `scope_str`: 筛选范围描述
+    - `news_lines`: 已格式化的新闻样本行
+
+    输出:
+    - 报告生成用 AI 提示词
+
+    作用:
+    - 统一关键词深度分析与全局/大盘综述两种提示词分支。
+    """
+
+    joined = "\n\n".join(news_lines) if news_lines else "无可用新闻样本"
+    if keyword:
+        return prompt_manager.get_user_prompt(
+            "report_keyword_analysis",
+            keyword=keyword,
+            time_range_label=time_range_label,
+            scope_str=scope_str,
+            news_lines=joined,
+        )
+    return prompt_manager.get_user_prompt(
+        "report_global_analysis",
+        time_range_label=time_range_label,
+        scope_str=scope_str,
+        news_lines=joined,
+    )
+
 
 settings = get_settings()
 from app.services.ai_service import ai_service
@@ -925,39 +1000,13 @@ class ReportService:
                 await db.commit()
                 return
 
-            def compact_text(text: Any, max_len: int = 180) -> str:
-                t = (text or "").replace("\r", " ").replace("\n", " ").strip()
-                if len(t) > max_len:
-                    return t[:max_len] + "…"
-                return t
-
-            news_lines = []
-            for idx, (title, content, summary, heat, src, url, pub_dt) in enumerate(ai_rows, start=1):
-                body = content if content else summary
-                body_str = compact_text(body, 220)
-                title_str = compact_text(title, 80)
-                src_str = compact_text(src, 30)
-                time_str = pub_dt.isoformat() if pub_dt else ""
-                news_lines.append(
-                    f"{idx}. [热度:{(heat or 0):.1f}] [{src_str}] {title_str}\n   时间: {time_str}\n   正文: {body_str}\n   链接: {url}"
-                )
-
-            # Build prompt
-            if keyword:
-                prompt = prompt_manager.get_user_prompt(
-                    "report_keyword_analysis",
-                    keyword=keyword,
-                    time_range_label=time_range_label,
-                    scope_str=scope_str,
-                    news_lines="\n\n".join(news_lines)
-                )
-            else:
-                prompt = prompt_manager.get_user_prompt(
-                    "report_global_analysis",
-                    time_range_label=time_range_label,
-                    scope_str=scope_str,
-                    news_lines="\n\n".join(news_lines)
-                )
+            news_lines = build_report_news_lines(ai_rows)
+            prompt = build_report_ai_prompt(
+                keyword=keyword,
+                time_range_label=time_range_label,
+                scope_str=scope_str,
+                news_lines=news_lines,
+            )
 
             # Mark as running
             data["ai_status"] = "running"
@@ -1143,38 +1192,13 @@ class ReportService:
             ai_result = await db.execute(ai_stmt)
             ai_rows = ai_result.all()
 
-            def compact_text(text: Any, max_len: int = 180) -> str:
-                t = (text or "").replace("\r", " ").replace("\n", " ").strip()
-                if len(t) > max_len:
-                    return t[:max_len] + "…"
-                return t
-
-            news_lines = []
-            for idx, (title, content, summary, heat, src, url, pub_dt) in enumerate(ai_rows, start=1):
-                body = content if content else summary
-                body_str = compact_text(body, 220)
-                title_str = compact_text(title, 80)
-                src_str = compact_text(src, 30)
-                time_str = pub_dt.isoformat() if pub_dt else ""
-                news_lines.append(
-                    f"{idx}. [热度:{(heat or 0):.1f}] [{src_str}] {title_str}\n   时间: {time_str}\n   正文: {body_str}\n   链接: {url}"
-                )
-
-            if keyword:
-                prompt = prompt_manager.get_user_prompt(
-                    "report_keyword_analysis",
-                    keyword=keyword,
-                    time_range_label=time_range_label,
-                    scope_str=scope_str,
-                    news_lines="\n\n".join(news_lines) if news_lines else "无可用新闻样本",
-                )
-            else:
-                prompt = prompt_manager.get_user_prompt(
-                    "report_global_analysis",
-                    time_range_label=time_range_label,
-                    scope_str=scope_str,
-                    news_lines="\n\n".join(news_lines) if news_lines else "无可用新闻样本",
-                )
+            news_lines = build_report_news_lines(ai_rows)
+            prompt = build_report_ai_prompt(
+                keyword=keyword,
+                time_range_label=time_range_label,
+                scope_str=scope_str,
+                news_lines=news_lines,
+            )
 
             data["ai_status"] = "running"
             data["ai_analysis"] = ""
@@ -1780,41 +1804,14 @@ class ReportService:
                     ai_result = await db.execute(ai_stmt)
                     ai_rows = ai_result.all()
 
-                    def compact_text(text: Any, max_len: int = 180) -> str:
-                        t = (text or "").replace("\r", " ").replace("\n", " ").strip()
-                        if len(t) > max_len:
-                            return t[:max_len] + "…"
-                        return t
+                    news_lines = build_report_news_lines(ai_rows)
+                    prompt = build_report_ai_prompt(
+                        keyword=keyword,
+                        time_range_label=time_range_label,
+                        scope_str=scope_str,
+                        news_lines=news_lines,
+                    )
 
-                    news_lines = []
-                    for idx, (title, content, summary, heat, src, url, pub_dt) in enumerate(ai_rows, start=1):
-                        body = content if content else summary
-                        body_str = compact_text(body, 220)
-                        title_str = compact_text(title, 80)
-                        src_str = compact_text(src, 30)
-                        time_str = pub_dt.isoformat() if pub_dt else ""
-                        news_lines.append(
-                            f"{idx}. [热度:{(heat or 0):.1f}] [{src_str}] {title_str}\n   时间: {time_str}\n   正文: {body_str}\n   链接: {url}"
-                        )
-
-                    # --- AI 提示词分流逻辑 ---
-                    # 场景1：关键词深度分析 (Keyword Depth Analysis)
-                    if keyword:
-                        prompt = prompt_manager.get_user_prompt(
-                            "report_keyword_analysis",
-                            keyword=keyword,
-                            time_range_label=time_range_label,
-                            scope_str=scope_str,
-                            news_lines="\n\n".join(news_lines) if news_lines else "无可用新闻样本"
-                        )
-                    # 场景2：全局/大盘综述 (Global Overview)
-                    else:
-                        prompt = prompt_manager.get_user_prompt(
-                            "report_global_analysis",
-                            time_range_label=time_range_label,
-                            scope_str=scope_str,
-                            news_lines="\n\n".join(news_lines) if news_lines else "无可用新闻样本"
-                        )
 
                     ai_analysis = await ai_service.chat_completion(prompt, route_key="REPORT")
                 except Exception as e:

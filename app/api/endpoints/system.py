@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import settings, verify_admin_access
 from app.core.database import get_db
 from app.core.config import get_missing_config_keys, BASE_DIR
-from app.core.logger import clear_cached_logs, get_cached_log_text, logger, sanitize_log_text
+from app.core.logger import clear_cached_logs, get_cached_log_text, get_logs_dir, logger, sanitize_log_text
 from app.models.news import News
 from app.schemas.system import AdminAuth
 from app.services.ai_service import ai_service
@@ -340,7 +340,8 @@ async def _test_chat_model_config(kind: str, base_url: str, api_key: str, model:
 
 
 def _get_logs_dir() -> Path:
-    return BASE_DIR / "logs"
+    """输入无；输出返回项目日志目录，委托给 logger 公共函数。"""
+    return get_logs_dir()
 
 
 @router.get("/app_info")
@@ -607,7 +608,6 @@ async def api_test_news_source(source: NewsSourcePayload, request: Request):
     if not is_admin_request(request):
         raise HTTPException(status_code=401, detail="未登录")
     from app.services.crawler_service import crawler_service
-    import aiohttp
 
     normalized = _normalize_news_source(source.model_dump())
     key = _source_key(normalized)
@@ -670,7 +670,6 @@ async def api_test_news_source_content(payload: SourceContentTestPayload, reques
     if not target_url:
         raise HTTPException(status_code=400, detail="URL 不能为空")
 
-    from app.services.crawler_service import crawler_service
 
     try:
         content = await crawler_service.crawl_content(target_url)

@@ -24,7 +24,7 @@ from app.core.exceptions import AIConfigurationError
 from app.core.logger import logger
 from app.models.news import News
 from app.services.ai_service import ai_service
-from app.utils.tools import normalize_regions_to_countries
+from app.utils.tools import cosine_similarity, normalize_regions_to_countries
 
 GENERIC_QUERY_TERMS = {
     "新闻",
@@ -989,30 +989,6 @@ def _coerce_query_vector(query_vector: Any) -> Optional[np.ndarray]:
     if norm <= 0:
         return None
     return vector
-
-
-def cosine_similarity(left: Any, right: Any) -> float:
-    """
-    输入:
-    - `left`/`right`: 两个待比较的向量
-
-    输出:
-    - 余弦相似度，无法计算时返回 0
-
-    作用:
-    - 为新闻搜索、相似报道和后过滤统一提供轻量向量相似度计算。
-    """
-
-    left_vec = _coerce_query_vector(left)
-    right_vec = _coerce_query_vector(right)
-    if left_vec is None or right_vec is None or left_vec.size != right_vec.size:
-        return 0.0
-    left_norm = float(np.linalg.norm(left_vec))
-    right_norm = float(np.linalg.norm(right_vec))
-    if left_norm <= 0 or right_norm <= 0:
-        return 0.0
-    return float(np.dot(left_vec, right_vec) / (left_norm * right_norm))
-
 
 async def _load_embeddings_for_candidates(
     db: AsyncSession,

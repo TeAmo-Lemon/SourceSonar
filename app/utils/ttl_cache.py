@@ -9,9 +9,43 @@ from __future__ import annotations
 import time
 from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 T = TypeVar("T")
+
+
+def clean_cache_part(value: Any) -> str:
+    """
+    输入:
+    - `value`: 缓存键片段
+
+    输出:
+    - 规范化后的字符串
+
+    作用:
+    - 统一清洗缓存键片段，避免空白、大小写差异造成重复缓存。
+    """
+
+    return str(value or "").strip().lower()
+
+
+def make_cache_key(name: str, **kwargs: Any) -> str:
+    """
+    输入:
+    - `name`: 缓存场景名
+    - `kwargs`: 查询参数
+
+    输出:
+    - 稳定缓存键字符串
+
+    作用:
+    - 用规范化片段拼接缓存键，供短 TTL 缓存统一使用。
+    """
+
+    parts = [name]
+    for key in sorted(kwargs):
+        parts.append(f"{key}={clean_cache_part(kwargs[key])}")
+    return "|".join(parts)
 
 
 @dataclass

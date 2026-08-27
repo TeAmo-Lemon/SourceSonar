@@ -230,29 +230,6 @@ def action_terms(text: str) -> Set[str]:
     return {term for term in _ACTION_HINTS if term in text}
 
 
-def cosine_similarity(left: List[float], right: List[float]) -> float:
-    """
-    输入:
-    - 两个向量
-
-    输出:
-    - 余弦相似度
-
-    作用:
-    - 供专题聚类在纯程序阶段复用。
-    """
-
-    if not left or not right or len(left) != len(right):
-        return 0.0
-    left_vec = np.asarray(left, dtype=np.float32)
-    right_vec = np.asarray(right, dtype=np.float32)
-    left_norm = float(np.linalg.norm(left_vec))
-    right_norm = float(np.linalg.norm(right_vec))
-    if left_norm <= 0 or right_norm <= 0:
-        return 0.0
-    return float(np.dot(left_vec, right_vec) / (left_norm * right_norm))
-
-
 def days_between(left: Optional[datetime], right: Optional[datetime]) -> int:
     """
     输入:

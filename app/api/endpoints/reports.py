@@ -28,7 +28,7 @@ from app.services.report_service import report_service
 from app.services.task_manager import task_manager
 from app.utils.news_query import build_news_query_filters
 from app.utils.news_ranking import sort_news_by_composite_score
-from app.utils.ttl_cache import TtlMemoryCache
+from app.utils.ttl_cache import TtlMemoryCache, clean_cache_part
 from app.utils.tools import normalize_regions_to_countries
 
 router = APIRouter(prefix="/api/report", tags=["report"])
@@ -40,21 +40,6 @@ _TERM_ANALYSIS_CACHE = TtlMemoryCache[dict[str, Any]](
     ttl_seconds=TERM_ANALYSIS_CACHE_TTL_SECONDS,
     max_size=TERM_ANALYSIS_CACHE_SIZE,
 )
-
-
-def _clean_cache_part(value: Optional[str]) -> str:
-    """
-    输入:
-    - `value`: 可选查询参数
-
-    输出:
-    - 适合作为缓存键的规范化字符串
-
-    作用:
-    - 统一清洗查询参数，避免大小写或空白差异造成重复缓存。
-    """
-
-    return str(value or "").strip().lower()
 
 
 def _term_analysis_cache_key(
@@ -79,13 +64,13 @@ def _term_analysis_cache_key(
     """
 
     return (
-        _clean_cache_part(query),
-        _clean_cache_part(start_date),
-        _clean_cache_part(end_date),
-        _clean_cache_part(category),
-        _clean_cache_part(region),
-        _clean_cache_part(source),
-        _clean_cache_part(range_key),
+        clean_cache_part(query),
+        clean_cache_part(start_date),
+        clean_cache_part(end_date),
+        clean_cache_part(category),
+        clean_cache_part(region),
+        clean_cache_part(source),
+        clean_cache_part(range_key),
     )
 
 

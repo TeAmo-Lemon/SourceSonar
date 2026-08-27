@@ -1,322 +1,276 @@
-# TrendSonar
+# SourceSonar v0.2.8
 
-当前版本：**v0.2.8**
+SourceSonar 是一个面向新闻热点聚合、事件去重、专题追踪、舆情报告和智能问答的 Web 工具。它会从配置的新闻源中持续抓取内容，结合 Embedding、OpenAI-compatible 大模型、Crawl4AI/Playwright 正文补抓与结构化分析能力，对新闻进行聚类、摘要、分类、情感分析、关键词实体提取、专题整理和报告生成。
 
-TrendSonar 是一个面向新闻热点聚合、事件去重、专题追踪、舆情报告和新闻智能体问答的 Web 工具。它会从配置的新闻源中持续抓取内容，结合 Embedding、OpenAI-compatible 大模型、Crawl4AI/Playwright 正文补抓与结构化分析能力，对新闻进行聚类、摘要、分类、情感分析、关键词实体提取、专题整理和报告生成。
+本项目适合用于搭建个人或团队内部的资讯观察台，例如：跟踪行业动态、观察公共事件进展、沉淀关键词报告、生成每日热点简报，或通过智能体按自然语言检索本地新闻库。
 
-项目适合用于搭建个人或团队内部的资讯观察台，例如跟踪行业动态、观察公共事件进展、沉淀关键词报告、生成每日热点简报，或通过智能体按自然语言检索本地新闻库。AI 分析结果依赖新闻源质量、模型能力、提示词和数据积累时间，建议作为辅助阅读与分析工具使用，重要结论仍应回看原文核验。
+> ⚠️ AI 分析结果依赖于新闻源质量、模型能力、提示词和数据积累时间，建议作为辅助阅读与分析工具使用，重要结论仍应回看原文校验。
+
+---
 
 ## 在线演示
 
-体验地址：
+| 场景 | 地址 |
+|------|------|
+| 全网综合新闻聚合 | [https://ainews.izam.cn](https://ainews.izam.cn) |
+| 医药垂直行业新闻 | [https://mednews.izam.cn](https://mednews.izam.cn) |
 
-全网综合新闻聚合：[https://ainews.izam.cn](https://ainews.izam.cn)
-
-医药垂直行业新闻：[https://mednews.izam.cn](https://mednews.izam.cn)
+---
 
 ## 功能概览
 
 ### 新闻采集与处理
 
-- 通过 `data/news_sources.json` 配置多个新闻源，支持启用状态、来源权重和地址维护。
-- 兼容 RSS/XML、JSON 接口和部分网页类热点源。
-- 支持通过管理后台卡片式新增、编辑、删除、测试新闻源。
-- 记录新闻源健康状态，包括最近抓取结果、测试结果、失败次数和错误信息。
-- 使用 Crawl4AI/Playwright 补抓正文，支持动态页面等待、超时、重试和并发控制。
-- 支持微博 Cookie、忽略域名、关注关键词过滤等采集辅助配置。
+- **多源配置**：通过 `data/news_sources.json` 配置多个新闻源，支持启用状态、来源权重、地区、分类、Cookie 等字段。
+- **多种格式**：兼容 RSS/XML、JSON 接口、部分网页类热点源。
+- **管理后台**：支持卡片式新增、编辑、删除、测试新闻源，实时查看健康状态（最近抓取结果、测试结果、失败次数和错误信息）。
+- **正文补抓**：使用 Crawl4AI 和 Playwright 对动态页面补抓完整正文，支持动态等待、超时、重试与并发控制。
+- **微博/Reddit 支持**：支持微博 Cookie、忽略域名、关注关键词过滤等采集辅助配置。
 
 ### 热点列表与语义搜索
 
 - 首页按热度或时间展示新闻，支持分页、时间范围、分类、地区和来源筛选。
-- 支持 `today`、`24h`、`3d`、`7d`、`30d`、`week`、`month`、`year`、`all` 及自定义日期范围。
-- 关键词搜索会优先使用向量召回，并结合文本匹配提升检索可用性。
+- 支持 `today / 24h / 3d / 7d / 30d / week / month / year / all` 及自定义日期范围。
+- 关键词搜索优先使用向量召回，同时结合文本匹配提升检索可用性。
 - 新闻详情弹窗展示摘要、来源、关键词、实体、情感、关联报道和相似新闻。
 - 支持生成热点新闻图片和智能体新闻卡片图片，便于分享或归档。
 
 ### AI 分析与聚类
 
-- 自动为热点新闻生成 AI 摘要，并在正文不足时尽量使用来源摘要兜底。
+- 自动为热点新闻生成 AI 摘要，正文不足时使用来源摘要兜底。
 - 自动补全分类、地区、情感倾向、关键词和实体。
-- 使用 Embedding 相似度与 AI 核验对同一事件多来源报道进行去重聚合。
-- 支持主力模型、备用模型和按功能配置的 AI 路由，例如摘要、情感、聚类、专题、报告、对话。
-- 支持在管理后台测试 Embedding、主模型和备用模型连通性。
+- 使用 Embedding 相似度与 AI 校验对同一事件多来源报道进行去重聚合。
+- 支持主力模型、备用模型和按功能配置的 AI 路由（摘要、情感、聚类、专题、报告、对话）。
+- 支持在管理后台测试 Embedding、主力模型和备用模型连通性。
 
 ### 专题追踪
 
-- 自动从近期高热新闻中发现候选事件簇，并通过 AI 审核生成专题。
+- 自动从近期高热新闻中发现候选事件簇，并通过 AI 批量审核生成专题。
 - 支持专题列表、专题详情、时间轴、相关新闻和专题趋势仪表盘。
 - 支持手动创建、改名、删除专题，并在后台扫描匹配相关新闻。
 - 支持刷新专题综述、刷新单个时间轴节点摘要。
-- 可通过配置调节专题召回池、候选簇数量、AI 审核批次、相似度阈值、质量等级、最低新闻数和来源数。
+- 可通过配置调整专题召回池、候选簇数量、AI 审核批次数、相似度阈值、质量等级、最低新闻数和来源数。
 
 ### 报告与图表
 
 - 支持综合报告和关键词报告，可按时间、分类、地区、来源和样本数量筛选。
-- 提供来源分布、词云、情感分布、正负面关键词、热度趋势、相关新闻和词项共现网络。
-- 支持日报、周报、月报缓存，以及历史报告读取和删除。
-- AI 报告支持流式输出，关键词深度报告会围绕事件演变、观点光谱、风险机会和后续观察生成 Markdown 内容。
+- 提供来源分布、词云、情感分布、正负面关键词、热度趋势、相关新闻和词项共现网络等图表。
+- 支持 AI 流式生成报告综述，分析趋势、事件和风险点。
+- 自动定时生成每日、每周、每月报告缓存。
+- 报告历史管理与缓存删除。
 
-### 新闻智能体
+### 图谱分析
 
-- 基于 PydanticAI 构建新闻智能体，支持连续对话和工具调用事件流。
-- 可调用内置工具查询热点新闻、语义搜索新闻、读取新闻详情、查询专题、读取专题详情、获取报告数据、创建关键词报告、创建事件专题、分析词项趋势、网页搜索、网页正文抓取和生成新闻图片。
-- 支持管理端新增自定义 HTTP 工具，配置参数、执行器、提示词提示和启用状态。
-- 自定义工具支持 GET/POST、URL/Query/Header/Body 模板、结果路径截取和返回体压缩。
-- 对网页抓取和自定义工具做基础 URL 安全校验，避免访问本机、内网或高风险元数据地址。
+- 从新闻关键词/实体中聚合节点与边，生成总览图谱。
+- 支持词项节点展开、词项详情和相关新闻查询。
+- 支持按时间、分类、地区和来源筛选图谱数据。
+
+### 事件溯源
+
+- 支持输入事件描述，自动搜索相关新闻并按时间线梳理事件脉络。
+- 结合 NewsAPI 外部数据源扩展事件覆盖范围。
+- 生成事件时间轴、参与方与关键节点分析。
+
+### 智能体
+
+- 支持自然语言问答，基于本地新闻库检索相关报道并给出分析。
+- 支持网页搜索、网页正文抓取、新闻图片生成等工具调用。
+- 自动解析用户问题中的时间范围提示。
 
 ### 管理后台
 
-- 后台地址：`/admin`。
-- 支持登录态 Cookie，管理员密码通过 `.env` 或环境变量 `ADMIN_PASSWORD` 设置。
-- 可在线维护运行配置、新闻源、提示词、后台任务、日志和智能体工具。
-- 支持查看当天内存日志、历史日志文件、任务状态，以及手动触发抓取分析和历史数据补全。
-- 修改 `config.yaml` 后会触发服务重启以重新加载配置。
+- 可视化编辑 `config.yaml` 配置项。
+- 管理新闻源（新增、编辑、删除、测试、健康状态查看）。
+- 管理员登录/退出（Cookie 会话），支持密码校验与失败锁定。
+- 手动触发全流程任务、全量情感重分析、阻断新闻清理。
+- 查看实时日志与历史日志文件。
+- 自定义 AI 提示词（摘要、聚类、专题、报告等场景）。
+- 测试 AI 模型连通性（Embedding / Chat / 流式）。
+
+---
 
 ## 技术栈
 
-- Web 框架：FastAPI、Starlette、Jinja2
-- 数据库：SQLAlchemy Async，默认 SQLite，可配置 PostgreSQL
-- AI 接入：OpenAI-compatible API、`openai` SDK、`pydantic-ai`
-- 向量能力：Embedding API，默认示例使用 SiliconFlow
-- 爬虫能力：aiohttp、BeautifulSoup、Crawl4AI、Playwright
-- 前端图表：ECharts
-- 图片生成：Pillow
-- 部署：Docker / Docker Compose
+| 层级 | 技术 |
+|------|------|
+| 后端框架 | Python 3.10+ / FastAPI + Uvicorn |
+| 数据库 | PostgreSQL（推荐） / SQLite（轻量模式） |
+| ORM | SQLAlchemy 2.0（异步） |
+| AI 模型 | OpenAI-compatible API（支持硅基流动、DeepSeek 等） |
+| 向量检索 | AI Embedding + PostgreSQL pgvector / NumPy 本地计算 |
+| 网页抓取 | aiohttp + Crawl4AI + Playwright + BeautifulSoup |
+| 前端 | 原生 HTML/CSS/JS（无框架依赖），ECharts + Graphology 图谱 |
+| 容器化 | Docker + Docker Compose |
+
+---
 
 ## 项目结构
 
-```text
-TrendSonar/
+```
+SourceSonar/
 ├── app/
-│   ├── api/              # FastAPI API 路由
-│   ├── core/             # 配置、数据库、日志、提示词默认值
-│   ├── models/           # SQLAlchemy 数据模型
-│   ├── services/         # 采集、聚类、报告、专题、智能体等业务服务
-│   └── utils/            # 配置读写、搜索、图片、网页工具等通用能力
-├── data/                 # 运行数据、新闻源、提示词和工具配置
-├── docker/               # Docker 示例配置
-├── docs/images/          # README 截图
-├── static/               # 前端静态资源
-├── templates/            # 页面模板
-├── main.py               # 应用入口
-├── config.yaml           # 主配置文件
-└── requirements.txt      # Python 依赖
+│   ├── api/                 # FastAPI 路由
+│   │   ├── api.py           # 路由聚合
+│   │   ├── deps.py          # 依赖注入（settings、templates、鉴权）
+│   │   └── endpoints/       # 各业务 API 端点
+│   │       ├── graph.py     # 图谱
+│   │       ├── news.py      # 新闻列表/搜索/详情
+│   │       ├── prompts.py   # 提示词管理
+│   │       ├── reports.py   # 报告生成
+│   │       ├── system.py    # 系统管理
+│   │       ├── topics.py    # 专题
+│   │       └── trace.py     # 事件溯源
+│   ├── core/                # 核心配置与基础设施
+│   │   ├── config.py        # 配置模型与读取
+│   │   ├── database.py      # 数据库连接管理
+│   │   ├── exceptions.py    # 自定义异常
+│   │   ├── logger.py        # 日志系统
+│   │   └── prompts.py       # 提示词管理器
+│   ├── models/              # SQLAlchemy 数据模型
+│   │   ├── news.py          # 新闻
+│   │   ├── topic.py         # 专题与时间轴
+│   │   ├── report.py        # 报告缓存
+│   │   └── clustering_history.py  # 聚类历史
+│   ├── schemas/             # Pydantic 请求/响应模型
+│   │   └── system.py
+│   ├── services/            # 业务逻辑层
+│   │   ├── admin_service.py       # 管理后台
+│   │   ├── ai_service.py          # AI 调用封装
+│   │   ├── cluster_service.py     # 新闻聚类
+│   │   ├── concurrency_service.py # 并发控制
+│   │   ├── crawler_service.py     # 新闻抓取
+│   │   ├── graph_service.py       # 图谱分析
+│   │   ├── news_title_service.py  # 标题优化
+│   │   ├── newsapi_service.py     # NewsAPI 外部源
+│   │   ├── pipeline_service.py    # 全流程编排
+│   │   ├── report_service.py      # 报告生成
+│   │   ├── similar_news_service.py# 相似新闻
+│   │   ├── source_health_service.py# 源健康状态
+│   │   ├── task_manager.py        # 后台任务管理
+│   │   ├── topic_discovery_service.py # 专题发现
+│   │   ├── topic_service.py       # 专题管理
+│   │   └── trace_service.py       # 事件溯源
+│   └── utils/               # 通用工具函数
+│       ├── agent_web.py           # 智能体网络工具
+│       ├── browser_process.py     # 浏览器进程管理
+│       ├── config_io.py           # YAML 读写
+│       ├── json_news_payload.py   # JSON 新闻解析
+│       ├── network.py             # 网络工具
+│       ├── news_content_filter.py # 无效内容过滤
+│       ├── news_image.py          # 新闻图片生成
+│       ├── news_query.py          # 新闻查询构建
+│       ├── news_ranking.py        # 新闻排序
+│       ├── news_search.py         # 语义搜索
+│       ├── postgres_search_indexes.py # 数据库索引
+│       ├── retry.py               # 异步重试
+│       ├── schema_migration.py    # 数据库迁移
+│       ├── summary_material.py    # 摘要素材
+│       ├── title_tools.py         # 标题工具
+│       ├── tools.py               # 通用工具
+│       ├── topic_preprocess.py    # 专题预处理
+│       └── ttl_cache.py           # TTL 内存缓存
+├── data/                   # 数据文件（新闻源配置等）
+├── docker/                 # Docker 配置
+├── docs/                   # 文档与截图
+├── logs/                   # 日志文件
+├── static/                 # 前端静态资源
+│   ├── css/                # 样式
+│   │   ├── base.css
+│   │   └── pages/          # 各页面样式
+│   └── js/
+│       ├── base.js
+│       └── pages/          # 各页面脚本
+├── templates/              # Jinja2 模板
+│   ├── base.html           # 基础布局
+│   ├── index.html          # 首页
+│   ├── topics.html         # 专题列表
+│   ├── topic_detail.html   # 专题详情
+│   ├── graph.html          # 图谱
+│   ├── report.html         # 报告
+│   ├── trace.html          # 事件溯源
+│   └── admin.html          # 管理后台
+├── config.yaml             # 主配置文件
+├── docker-compose.yml      # Docker Compose 编排
+├── Dockerfile              # Docker 镜像构建
+├── main.py                 # 应用入口
+├── requirements.txt        # Python 依赖
+└── README.md
 ```
 
-## 快速开始（Docker Compose）
+---
 
-推荐使用 Docker Compose 部署。启动前先准备运行配置和新闻源文件。
+## 快速开始
 
-### 1. 准备目录
+### 环境要求
+
+- Python 3.10+
+- PostgreSQL 16+（推荐，支持 pgvector 向量检索）或 SQLite
+- 一个 OpenAI-compatible API Key（如硅基流动、DeepSeek 等）
+
+### 本地运行
 
 ```bash
-mkdir -p data
+# 1. 克隆项目
+git clone https://github.com/aicezam/trendsonar.git
+cd trendsonar
+
+# 2. 安装依赖
+pip install -r requirements.txt
+
+# 3. 配置 config.yaml（至少配置 AI API Key 和数据库连接）
+
+# 4. 启动
+python main.py
 ```
 
-复制或参考仓库内示例文件：
+访问 `http://localhost:8193` 即可使用。
 
-- `docker/data/config.yaml` -> `data/config.yaml`
-- `docker/data/news_sources.json` -> `data/news_sources.json`
-
-至少需要配置：
-
-- `DATABASE_URL`：数据库连接，默认可用 `sqlite+aiosqlite:///data/trendsonar.db`
-- `SILICONFLOW_API_KEY` / `SILICONFLOW_BASE_URL` / `EMBEDDING_MODEL`：Embedding 配置
-- `MAIN_AI_API_KEY` / `MAIN_AI_BASE_URL` / `MAIN_AI_MODEL`：主力生成模型
-- `BACKUP_AI_API_KEY` / `BACKUP_AI_BASE_URL` / `BACKUP_AI_MODEL`：备用生成模型
-- `ADMIN_PASSWORD`：管理员密码，建议通过环境变量设置
-
-### 2. 创建 `docker-compose.yml`
-
-```yaml
-version: '3.8'
-
-services:
-  trendsonar:
-    image: instarsea/trendsonar
-    container_name: trendsonar
-    restart: always
-    ports:
-      - "8193:8193"
-    volumes:
-      - ./data/config.yaml:/app/config.yaml
-      - ./data:/app/data
-    environment:
-      - TZ=Asia/Shanghai
-      - ADMIN_PASSWORD=your_secure_password
-```
-
-### 3. 启动服务
+### Docker 部署
 
 ```bash
 docker-compose up -d
 ```
 
-启动后访问：
-
-- 首页：`http://localhost:8193`
-- 专题页：`http://localhost:8193/topics`
-- 报告页：`http://localhost:8193/report`
-- 管理后台：`http://localhost:8193/admin`
-
-## Docker CLI 部署
-
-```bash
-docker run -d \
-  --name trendsonar \
-  -p 8193:8193 \
-  -v /path/to/your/data/config.yaml:/app/config.yaml \
-  -v /path/to/your/data:/app/data \
-  -e TZ=Asia/Shanghai \
-  -e ADMIN_PASSWORD=your_secure_password \
-  instarsea/trendsonar
-```
-
-请将 `/path/to/your/data` 替换为实际数据目录。Windows 路径挂载时可使用类似 `D:/trendsonar/data:/app/data` 的形式。
-
-## 本地源码运行
-
-建议使用 Python 3.11。
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
-```
-
-Linux / Debian 环境可使用：
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python main.py
-```
-
-正文抓取依赖 Playwright/Chromium。本地首次运行如遇浏览器依赖缺失，可执行：
-
-```bash
-python -m playwright install chromium
-python -m playwright install-deps chromium
-```
-
-也可以通过命令行指定配置文件：
-
-```bash
-python main.py --config /path/to/config.yaml
-```
+---
 
 ## 配置说明
 
-配置读取优先级为：初始化参数、`config.yaml`、环境变量、`.env`、文件密钥。默认配置文件为项目根目录 `config.yaml`，也可以通过环境变量 `TRENDSONAR_CONFIG` 或启动参数 `--config` 指定。
-
-常用配置项：
+核心配置文件为 `config.yaml`，主要配置项：
 
 | 配置项 | 说明 |
-| --- | --- |
-| `APP_NAME` | 页面标题和系统名称 |
-| `PORT` | 服务端口，默认 `8193` |
-| `LOG_LEVEL` / `LOG_RETENTION_DAYS` | 日志等级和日志文件保留天数 |
-| `DATABASE_URL` | 数据库连接，支持 SQLite 和 PostgreSQL |
-| `WEIBO_COOKIE` | 微博正文抓取所需 Cookie |
-| `CRAWLER_CONCURRENCY` | 正文补抓并发数 |
-| `CRAWLER_*` | 正文抓取等待、超时、重试和最小长度配置 |
-| `SILICONFLOW_*` / `EMBEDDING_MODEL` | Embedding 服务配置 |
-| `MAIN_AI_*` | 主力生成模型配置 |
-| `BACKUP_AI_*` | 备用生成模型配置 |
-| `AI_ROUTE` | 各功能模块使用 `main` 或 `backup` 模型 |
-| `SCHEDULE_INTERVAL_MINUTES` | 自动全流程任务间隔 |
-| `AUTO_SUMMARY_TOP_N` | 自动摘要新闻数量 |
-| `AUTO_ANALYSIS_TOP_N` | 自动深度分析新闻数量 |
-| `CLUSTERING_THRESHOLD` | 新闻聚类相似度阈值 |
-| `FOLLOW_KEYWORDS` | 关注关键词，逗号分隔；为空则不过滤 |
-| `FOLLOW_KEYWORDS_THRESHOLD` | 关注关键词向量相似度阈值 |
-| `NEWS_CATEGORIES` | 新闻分类列表 |
-| `IGNORED_DOMAINS` | 忽略域名列表 |
-| `DATA_CLEANUP_*` | 低热历史新闻自动清理配置 |
-| `TOPIC_*` | 专题生成、匹配、更新时间窗和质量控制 |
-| `TOPIC_DISCOVERY_*` | v0.2.8 专题候选簇发现和 AI 批量审核参数 |
+|--------|------|
+| `APP_NAME` | 应用名称（默认 SourceSonar） |
+| `PORT` | 服务端口（默认 8193） |
+| `DATABASE_URL` | 数据库连接串（留空使用 SQLite） |
+| `MAIN_AI_*` | 主力 AI 模型配置（API Key、Base URL、Model） |
+| `BACKUP_AI_*` | 备用 AI 模型配置 |
+| `EMBEDDING_MODEL` | Embedding 模型名称 |
+| `CRAWLER_*` | 爬虫参数（并发数、超时、重试等） |
+| `AUTO_*` | 自动任务参数（分析 TopN、摘要数等） |
+| `TOPIC_*` | 专题参数（召回池、相似度阈值、审核批次等） |
+| `FOLLOW_KEYWORDS` | 关注关键词（逗号分隔） |
+| `LOG_*` | 日志参数（级别、保留天数） |
 
-`AI_ROUTE` 示例：
+完整配置项请参考 `config.yaml` 中的注释。
 
-```yaml
-AI_ROUTE:
-  SUMMARY: "main"
-  SENTIMENT: "backup"
-  KEYWORDS: "backup"
-  CLUSTERING: "backup"
-  TOPIC_NAME: "backup"
-  TOPIC_EVAL: "backup"
-  TOPIC_MATCH: "backup"
-  TOPIC_TIMELINE: "backup"
-  TOPIC_OVERVIEW: "backup"
-  TOPIC_INITIAL_SUMMARY: "main"
-  REPORT: "backup"
-  CHAT: "backup"
-```
+---
 
-## 新闻源配置
+## 定时任务调度
 
-新闻源位于 `data/news_sources.json`，基础结构如下：
+服务启动后自动运行调度器，按以下节奏执行：
 
-```json
-[
-  {
-    "name": "来源名称",
-    "weight": 1.0,
-    "address": "https://example.com/rss-or-api",
-    "enabled": true
-  }
-]
-```
-
-字段说明：
-
-- `name`：来源名称，会显示在列表和报告中。
-- `weight`：来源权重，会影响热度计算。
-- `address`：RSS、XML、JSON 或可解析的新闻接口地址。
-- `enabled`：是否启用该来源。
-
-管理后台的新闻源测试不会写入数据库，适合在正式保存前检查抓取结果和正文补抓效果。
-
-## 常用 API
-
-| 接口 | 说明 |
-| --- | --- |
-| `GET /api/app_info` | 应用名称和版本 |
-| `GET /api/news` | 新闻列表、筛选和语义搜索 |
-| `GET /api/news/top` | 热点新闻 TopN |
-| `GET /api/news/{news_id}` | 新闻详情 |
-| `GET /api/news/{news_id}/similar` | 相似新闻 |
-| `POST /api/generate_summary/{news_id}` | 为单条新闻生成摘要 |
-| `GET /api/news_image` | 生成热点新闻图片 |
-| `GET /api/topics/list` | 专题列表 |
-| `GET /api/topics/{topic_id}` | 专题详情 |
-| `GET /api/topics/{topic_id}/trends` | 专题趋势数据 |
-| `POST /api/report/generate` | 生成报告 |
-| `GET /api/report/analysis` | 报告分析数据 |
-| `GET /api/report/term-analysis` | 词项分析 |
-| `GET /api/chat` | 基于新闻库的 RAG 问答 |
-| `GET /api/agent/chat` | 智能体工具调用问答流 |
-| `POST /api/trigger_crawl` | 管理员手动触发全流程 |
-
-管理端接口需要登录或管理员鉴权，包括配置读写、新闻源维护、日志查看、任务状态、AI 连通性测试、智能体工具维护等。
-
-## 自动任务
-
-应用启动后会初始化数据库并启动定时任务。默认流程包括：
-
-1. 抓取全部启用新闻源。
-2. 保存新新闻并更新新闻源健康状态。
-3. 对近期开窗新闻进行聚类去重。
-4. 批量补全分类、地区、情感、关键词和实体。
-5. 为热点新闻生成 AI 摘要。
-6. 生成或刷新日报缓存。
-7. 按专题间隔刷新专题。
-8. 按配置清理低热历史数据。
+1. 从新闻源抓取最新内容并入库
+2. 对入库新闻去重聚合
+3. 为 TopN 新闻生成 AI 摘要
+4. 向量补全分类、地区、情感、关键词和实体
+5. 为热点新闻生成 AI 摘要
+6. 生成或刷新日报缓存
+7. 按专题间隔刷新专题
+8. 按配置清理低热历史数据
 
 此外，调度器会在特定时间生成每日、每周和每月最终报告缓存。全流程任务完成后，服务会按当前逻辑尝试重启以释放内存。
+
+---
 
 ## 使用建议
 
@@ -327,14 +281,18 @@ AI_ROUTE:
 - 关键词报告和智能体问答只基于已入库新闻与可调用工具，不代表完整互联网信息。
 - 涉及法律、医疗、投资、公共安全等高风险判断时，请以原文和权威来源为准。
 
+---
+
 ## 推荐新闻源
 
 如果需要扩展 RSS 或热点来源，可以参考：
 
-- [Hot News](https://github.com/orz-ai/hot_news)：每日热点新闻聚合。
-- [NewsNow](https://github.com/ourongxing/newsnow)：多平台热榜聚合，提供部分 RSS/API 接口。
-- [RSSHub](https://github.com/DIYgod/RSSHub)：为许多网站生成 RSS。
-- [AnyFeeder](https://plink.anyfeeder.com/)：RSS 源聚合服务。
+- [Hot News](https://github.com/orz-ai/hot_news)：每日热点新闻聚合
+- [NewsNow](https://github.com/ourongxing/newsnow)：多平台热榜聚合，提供部分 RSS/API 接口
+- [RSSHub](https://github.com/DIYgod/RSSHub)：为许多网站生成 RSS
+- [AnyFeeder](https://plink.anyfeeder.com/)：RSS 源聚合服务
+
+---
 
 ## 界面预览
 
@@ -350,6 +308,8 @@ AI_ROUTE:
 
 <img src="docs/images/baobiao1.png" alt="报告预览1" width="100%">
 <img src="docs/images/baobiao2.png" alt="报告预览2" width="100%">
+
+---
 
 ## 更新日志
 
@@ -368,9 +328,13 @@ AI_ROUTE:
 - **v0.1.1**：修复部分鉴权问题。
 - **v0.1.0**：初始版本，发布至 Docker Hub。
 
+---
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=aicezam/trendsonar&type=date&legend=top-left)](https://www.star-history.com/#aicezam/trendsonar&type=date&legend=top-left)
+
+---
 
 ## 许可证
 

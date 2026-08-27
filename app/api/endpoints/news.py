@@ -30,7 +30,7 @@ from app.services.similar_news_service import find_similar_news
 from app.utils.news_query import build_news_query_filters, serialize_news_item
 from app.utils.news_search import semantic_news_search
 from app.utils.summary_material import build_summary_generation_input, get_existing_summary_material
-from app.utils.ttl_cache import TtlMemoryCache
+from app.utils.ttl_cache import TtlMemoryCache, clean_cache_part
 from app.utils.tools import normalize_regions_to_countries
 
 router = APIRouter(prefix="/api", tags=["news"])
@@ -46,21 +46,6 @@ _SIMILAR_NEWS_CACHE = TtlMemoryCache[dict[str, Any]](
     ttl_seconds=_SIMILAR_NEWS_CACHE_TTL_SECONDS,
     max_size=256,
 )
-
-
-def _clean_cache_part(value: Any) -> str:
-    """
-    输入:
-    - `value`: 可选查询参数
-
-    输出:
-    - 适合作为缓存键的规范化字符串
-
-    作用:
-    - 统一清洗新闻搜索缓存参数，减少空白、大小写造成的重复缓存。
-    """
-
-    return str(value or "").strip().lower()
 
 
 def _news_search_cache_key(
@@ -88,16 +73,16 @@ def _news_search_cache_key(
     """
 
     return (
-        _clean_cache_part(q),
+        clean_cache_part(q),
         page,
         page_size,
-        _clean_cache_part(date),
-        _clean_cache_part(start_date),
-        _clean_cache_part(end_date),
-        _clean_cache_part(sort_by),
-        _clean_cache_part(category),
-        _clean_cache_part(region),
-        _clean_cache_part(source),
+        clean_cache_part(date),
+        clean_cache_part(start_date),
+        clean_cache_part(end_date),
+        clean_cache_part(sort_by),
+        clean_cache_part(category),
+        clean_cache_part(region),
+        clean_cache_part(source),
     )
 
 

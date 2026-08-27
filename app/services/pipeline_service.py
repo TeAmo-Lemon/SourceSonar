@@ -31,8 +31,7 @@ from app.services.news_title_service import refine_news_title_if_needed
 from app.services.report_service import report_service
 from app.services.task_manager import task_manager
 from app.services.topic_service import topic_service
-from app.utils.news_content_filter import is_blocked_access_item, is_blocked_access_text
-from app.utils.retry import retry_async_result
+from app.utils.news_content_filter import is_blocked_access_item
 from app.utils.summary_material import build_summary_generation_input, get_existing_summary_material
 from app.utils.tools import clean_html_tags
 from app.utils.tools import normalize_regions_to_countries
@@ -41,6 +40,57 @@ settings = get_settings()
 
 DATA_DIR = Path("data")
 STATE_FILE = DATA_DIR / "scheduler_state.json"
+
+
+async def _analyze_single_news(news_item, sem: asyncio.Semaphore, *, use_summary_fallback: bool = True, label: str = "") -> Optional[dict]:
+    """
+    输入:
+    - `news_item`: News 对象
+    - `sem`: 并发信号量
+    - `use_summary_fallback`: 是否在摘要缺失时退回标题
+    - `label`: 日志标签
+
+    输出:
+    - AI 情感/分类/关键词结果字典；失败返回 None
+
+    作用:
+    - 统一三条全量情感分析路径中对单条新闻的 AI 调用、并发控制和日志处理。
+    """
+
+    async with sem:
+        try:
+            if label:
+                logger.debug(f"   {label} 🧠 分析中: {news_item.title}")
+            if use_summary_fallback:
+                text = (news_item.summary or "").strip() or (news_item.title or "").strip()
+            else:
+                text = news_item.summary or news_item.content or ""
+            return await ai_service.analyze_sentiment(news_item.title, text)
+        except AIServiceUnavailableError:
+            raise
+        except Exception as e:
+            logger.error(f"   ⚠️ 分析失败 ({getattr(news_item, 'id', None)}/{getattr(news_item, 'title', '')[:20]}): {e}")
+            return None
+
+
+def _apply_analysis_result(news_item, res: dict) -> None:
+    """
+    输入:
+    - `news_item`: 新闻对象
+    - `res`: AI 返回的分析结果
+
+    输出:
+    - 无
+
+    作用:
+    - 统一写回情感/分类/关键词/实体字段。
+    """
+
+    news_item.sentiment_score = res["score"]
+    news_item.sentiment_label = res["label"]
+    news_item.category = res.get("category", "其他")
+    news_item.keywords = res["keywords"]
+    news_item.entities = res["entities"]
 
 
 def _body_fetch_concurrency(total_task: int, hard_cap: int = 2) -> int:
@@ -99,43 +149,14 @@ async def _crawl_content_with_retry(url: str, label: str, min_length: Optional[i
     - `min_length`: 正文最小有效长度
 
     输出:
-    - 抓取到的正文；两次失败后返回 None
+    - 抓取到的正文；失败或正文为登录/受限提示时返回 None
 
     作用:
-    - 为摘要和分析任务统一提供轻量正文重试，避免全局清理浏览器打断其他并发抓取。
+    - 委托给 CrawlerService 的统一“正文抓取 + 重试 + 登录墙过滤”能力，减少重复实现。
     """
 
-    effective_min_length = max(10, int(min_length or getattr(settings, "CRAWLER_CONTENT_MIN_LENGTH", 30) or 30))
-    retry_delay = max(1.0, float(getattr(settings, "CRAWLER_RETRY_DELAY_SECONDS", 8.0) or 8.0))
-    fetch_timeout = max(5.0, float(getattr(settings, "CRAWLER_FETCH_TIMEOUT_SECONDS", 45.0) or 45.0))
+    return await crawler_service.crawl_with_retry(url, label=label, min_length=min_length)
 
-    async def crawl_once() -> Optional[str]:
-        """
-        输入:
-        - 无，闭包读取新闻 URL
-
-        输出:
-        - 抓取到的正文；失败或正文为登录/受限提示时返回 None
-
-        作用:
-        - 提供单次正文抓取动作，交给通用重试工具调度；
-          若抓到的是“需登录/访问受限”提示文本则视为无效，避免污染摘要素材。
-        """
-
-        content = await crawler_service.crawl_content(url)
-        if content and is_blocked_access_text(content):
-            logger.info(f"   ⚠️ 正文为登录/受限提示，忽略该正文: {label}")
-            return None
-        return content
-
-    return await retry_async_result(
-        crawl_once,
-        attempts=_crawler_retry_attempts(),
-        delay_seconds=retry_delay,
-        per_attempt_timeout_seconds=fetch_timeout,
-        min_valid_length=effective_min_length,
-        label=label,
-    )
 
 
 async def _process_summary_news_item(news_id: int, index: int, total: int) -> bool:
@@ -574,16 +595,7 @@ async def auto_analyze_sentiment_top_n() -> None:
         batch_size = 50
 
         async def analyze_task(news_item, index):
-            async with sem:
-                try:
-                    text = (news_item.summary or "").strip() or (news_item.title or "").strip()
-                    logger.debug(f"   ({index}/{total_items}) 🧠 分析中: {news_item.title}")
-                    return await ai_service.analyze_sentiment(news_item.title, text)
-                except AIServiceUnavailableError:
-                    raise
-                except Exception as e:
-                    logger.error(f"   ({index}/{total_items}) ⚠️ 分析失败 ({news_item.title}): {e}")
-                    return None
+            return await _analyze_single_news(news_item, sem, use_summary_fallback=True, label=f"({index}/{total_items})")
 
         count = 0
         for i in range(0, total_items, batch_size):
@@ -933,20 +945,11 @@ async def reanalyze_all_categories() -> Dict:
         sem = asyncio.Semaphore(5)
 
         async def analyze_task(news_item):
-            async with sem:
-                try:
-                    text = news_item.summary or news_item.content or ""
-                    res = await ai_service.analyze_sentiment(news_item.title, text)
-                    if res:
-                        news_item.sentiment_score = res["score"]
-                        news_item.sentiment_label = res["label"]
-                        news_item.category = res.get("category", "其他")
-                        news_item.keywords = res["keywords"]
-                        news_item.entities = res["entities"]
-                        return True
-                except Exception as e:
-                    logger.error(f"   ⚠️ 分析失败 ({news_item.title}): {e}")
-                return False
+            res = await _analyze_single_news(news_item, sem, use_summary_fallback=False)
+            if res:
+                _apply_analysis_result(news_item, res)
+                return True
+            return False
 
         tasks = []
         batch_size = 50
@@ -1021,21 +1024,16 @@ async def background_analyze_all() -> None:
             sem = asyncio.Semaphore(10)
 
             async def analyze_task(news_item):
-                async with sem:
-                    try:
-                        text = news_item.summary or news_item.content or ""
-                        if len(text) < 10:
-                            return {
-                                "score": 50,
-                                "label": "中立",
-                                "category": "其他",
-                                "keywords": ["无内容"],
-                                "entities": [],
-                            }
-                        return await ai_service.analyze_sentiment(news_item.title, text)
-                    except Exception as e:
-                        logger.error(f"   ⚠️ 分析失败 ({news_item.id}): {e}")
-                        return None
+                text = (news_item.summary or "") + (news_item.content or "")
+                if len(text.strip()) < 10:
+                    return {
+                        "score": 50,
+                        "label": "中立",
+                        "category": "其他",
+                        "keywords": ["无内容"],
+                        "entities": [],
+                    }
+                return await _analyze_single_news(news_item, sem, use_summary_fallback=False)
 
             tasks = [analyze_task(n) for n in items]
             results = await asyncio.gather(*tasks)

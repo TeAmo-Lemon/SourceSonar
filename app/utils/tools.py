@@ -286,3 +286,33 @@ def normalize_regions_to_countries(region_text: Optional[str]) -> str:
     if not countries:
         return "其他"
     return ",".join(countries)
+
+
+def cosine_similarity(left: Any, right: Any) -> float:
+    """
+    输入:
+    - `left`/`right`: 两个待比较的向量（列表或 NumPy 数组）
+
+    输出:
+    - 余弦相似度，无法计算时返回 0
+
+    作用:
+    - 为新闻搜索、相似报道、专题聚类统一提供轻量向量相似度计算。
+    """
+
+    import numpy as np
+    try:
+        left_vec = np.asarray(left, dtype=np.float32)
+        right_vec = np.asarray(right, dtype=np.float32)
+    except (TypeError, ValueError):
+        return 0.0
+    if left_vec.ndim != 1 or right_vec.ndim != 1 or left_vec.size == 0 or right_vec.size == 0:
+        return 0.0
+    if left_vec.size != right_vec.size:
+        return 0.0
+    left_norm = float(np.linalg.norm(left_vec))
+    right_norm = float(np.linalg.norm(right_vec))
+    if left_norm <= 0 or right_norm <= 0:
+        return 0.0
+    return float(np.dot(left_vec, right_vec) / (left_norm * right_norm))
+

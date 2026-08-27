@@ -24,7 +24,7 @@ from bs4 import BeautifulSoup
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
-from app.core.config import BASE_DIR, get_settings
+from app.core.config import get_news_sources_path_candidates, get_settings
 from app.core.database import AsyncSessionLocal
 from app.core.exceptions import AIConfigurationError, AIServiceUnavailableError
 from app.core.logger import setup_logger
@@ -37,7 +37,8 @@ from app.utils.json_news_payload import (
     extract_json_news_items,
     normalize_json_news_item,
 )
-from app.utils.news_content_filter import is_blocked_access_item
+from app.utils.news_content_filter import is_blocked_access_item, is_blocked_access_text
+from app.utils.retry import retry_async_result
 from app.utils.tools import clean_html_tags
 
 settings = get_settings()
@@ -420,10 +421,7 @@ class CrawlerService:
         - 兼容 `data/` 与项目根目录两种放置方式
         """
 
-        return [
-            BASE_DIR / "data" / self.sources_file,
-            BASE_DIR / self.sources_file,
-        ]
+        return get_news_sources_path_candidates(self.sources_file)
 
     def load_sources(self) -> List[Dict[str, Any]]:
         """
@@ -1204,6 +1202,41 @@ class CrawlerService:
                 return await self._crawl_content_with_playwright(target_url)
 
         return await concurrency_service.run_crawler(do_crawl)
+
+    async def crawl_with_retry(self, url: str, label: str = "正文抓取", min_length: Optional[int] = None) -> Optional[str]:
+        """
+        输入:
+        - `url`: 新闻正文地址
+        - `label`: 日志标签
+        - `min_length`: 正文最小有效长度
+
+        输出:
+        - 抓取到的正文；失败或正文为登录/受限提示时返回 None
+
+        作用:
+        - 统一封装“正文抓取 + 重试 + 登录墙过滤”，消除各服务中重复的 crawl_once 闭包。
+        """
+
+        effective_min_length = max(10, int(min_length or getattr(settings, "CRAWLER_CONTENT_MIN_LENGTH", 30) or 30))
+        retry_delay = max(1.0, float(getattr(settings, "CRAWLER_RETRY_DELAY_SECONDS", 8.0) or 8.0))
+        fetch_timeout = max(5.0, float(getattr(settings, "CRAWLER_FETCH_TIMEOUT_SECONDS", 45.0) or 45.0))
+        retry_attempts = max(1, int(getattr(settings, "CRAWLER_RETRY_ATTEMPTS", 2) or 2))
+
+        async def crawl_once() -> Optional[str]:
+            content = await self.crawl_content(url)
+            if content and is_blocked_access_text(content):
+                logger.info(f"   ⚠️ 正文为登录/受限提示，忽略该正文: {label}")
+                return None
+            return content
+
+        return await retry_async_result(
+            crawl_once,
+            attempts=retry_attempts,
+            delay_seconds=retry_delay,
+            per_attempt_timeout_seconds=fetch_timeout,
+            min_valid_length=effective_min_length,
+            label=label,
+        )
 
 
 crawler_service = CrawlerService()

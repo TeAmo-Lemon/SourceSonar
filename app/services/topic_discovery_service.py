@@ -14,10 +14,10 @@ from app.utils.topic_preprocess import (
     TopicNewsFeature,
     UnionFind,
     build_news_feature,
-    cosine_similarity,
     days_between,
     group_by_root,
 )
+from app.utils.tools import cosine_similarity
 
 
 @dataclass

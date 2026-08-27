@@ -66,14 +66,6 @@ _INABILITY_HINTS_EN = ("please", "must", "required", "need", "to continue", "una
 # 组合规则仅适用于短文本（登录墙提示通常很短，避免误伤正常长文）
 _COMBINED_MAX_LENGTH = 150
 
-# 组合规则用的弱信号词（需与限制词、无能为力词一起出现才判定）
-_LOGIN_HINTS = ("登录", "登陆", "sign in", "log in", "login")
-_RESTRICT_HINTS = ("受限", "无法访问", "阻止", "访问被拒绝", "拒绝访问", "被封", "封禁", "屏蔽", "blocked", "denied", "restricted", "banned", "forbidden")
-_INABILITY_HINTS_ZH = ("需", "请", "要求", "必须", "无法", "不能", "被", "阻止")
-_INABILITY_HINTS_EN = ("please", "must", "required", "need", "to continue", "unable", "cannot", "you are")
-# 组合规则仅适用于短文本（登录墙提示通常很短，避免误伤正常长文）
-_COMBINED_MAX_LENGTH = 150
-
 
 def is_media_file_url(url: Optional[str]) -> bool:
     """

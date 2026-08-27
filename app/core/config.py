@@ -25,6 +25,24 @@ _config_env = os.environ.get("TRENDSONAR_CONFIG")
 CONFIG_PATH = Path(_config_env) if _config_env else BASE_DIR / "config.yaml"
 
 
+def get_news_sources_path_candidates(filename: str = "news_sources.json") -> list[Path]:
+    """
+    输入:
+    - `filename`: 新闻源配置文件名
+
+    输出:
+    - 可能的新闻源配置文件路径列表（按优先级）
+
+    作用:
+    - 兼容 `data/` 与项目根目录两种放置方式，供抓取/聚类共用。
+    """
+
+    return [
+        BASE_DIR / "data" / filename,
+        BASE_DIR / filename,
+    ]
+
+
 def _normalize_yaml_config(data: Dict[str, Any]) -> Dict[str, Any]:
     normalized: Dict[str, Any] = {}
     for k, v in (data or {}).items():

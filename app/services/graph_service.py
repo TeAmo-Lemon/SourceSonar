@@ -23,7 +23,7 @@ from app.models.news import News
 from app.utils.news_query import build_news_query_filters, serialize_news_item
 from app.utils.news_ranking import sort_news_by_composite_score
 from app.utils.tools import normalize_regions_to_countries
-from app.utils.ttl_cache import TtlMemoryCache
+from app.utils.ttl_cache import TtlMemoryCache, make_cache_key
 
 settings = get_settings()
 
@@ -115,20 +115,6 @@ class GraphService:
             max_size=GRAPH_CACHE_SIZE,
         )
 
-    def _clean_cache_part(self, value: Any) -> str:
-        """
-        输入:
-        - `value`: 查询参数值
-
-        输出:
-        - 规范化后的缓存键片段
-
-        作用:
-        - 让等价筛选条件命中同一份短期缓存。
-        """
-
-        return str(value or "").strip().lower()
-
     def _cache_key(self, name: str, **kwargs: Any) -> str:
         """
         输入:
@@ -142,10 +128,7 @@ class GraphService:
         - 用 JSON 兼容的字符串拼接方式为图谱聚合结果生成缓存键。
         """
 
-        parts = [name]
-        for key in sorted(kwargs):
-            parts.append(f"{key}={self._clean_cache_part(kwargs[key])}")
-        return "|".join(parts)
+        return make_cache_key(name, **kwargs)
 
     def _normalize_range(
         self,

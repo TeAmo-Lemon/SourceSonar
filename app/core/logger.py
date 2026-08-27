@@ -113,8 +113,23 @@ def clear_cached_logs() -> None:
         _log_buffer.clear()
 
 
-def _get_logs_dir() -> Path:
+def get_logs_dir() -> Path:
+    """
+    输入:
+    - 无
+
+    输出:
+    - 项目日志目录路径
+
+    作用:
+    - 供日志模块与 API 层统一获取日志目录，避免重复定义路径。
+    """
+
     return BASE_DIR / "logs"
+
+
+def _get_logs_dir() -> Path:
+    return get_logs_dir()
 
 
 def _get_retention_days() -> int:
