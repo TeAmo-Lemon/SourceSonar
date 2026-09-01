@@ -1,4 +1,4 @@
-"""
+﻿"""
 本文件用于定义 `news` 表的 ORM 模型，承载新闻抓取、聚类与分析后的结构化字段。
 主要类:
 - `News`: 新闻数据模型
@@ -47,6 +47,9 @@ class News(Base):
     content = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     is_ai_summary = Column(Boolean, default=False)
+
+    # 新闻页多媒体图片链接列表（JSON 数组，保存抓取时提取到的图片）
+    images = Column(JSON, default=list)
 
     heat_score = Column(Float, default=0.0, index=True)
     publish_date = Column(DateTime, default=datetime.now, index=True)

@@ -1901,6 +1901,7 @@ const IS_ADMIN = !!reportPageData.isAdmin;
                 <span>热度 ${Number(news.heat || 0).toFixed(1)}</span>
                 <span class="sentiment-pill ${sentimentClass(news.sentiment_label)}">${escapeHtml(news.sentiment_label || '未分析')}${news.sentiment_score !== undefined ? '：' + news.sentiment_score : ''}</span>
             </div>
+            ${renderNewsImages(news.images, true)}
             <div class="detail-actions">
                 <a class="detail-primary-link" href="${escapeHtml(newsUrl || '#')}" target="_blank" rel="noopener noreferrer">查看原文</a>
                 <button class="btn-link" data-action="generate-summary" data-news-id="${news.id}">重新生成摘要</button>
@@ -2168,6 +2169,28 @@ const IS_ADMIN = !!reportPageData.isAdmin;
         }
     };
 
+    // 渲染新闻配图缩略图（仅展示图片直链，过滤非法地址）
+    function renderNewsImages(images, detail = false) {
+        if (!Array.isArray(images) || !images.length) return '';
+        // 对已入库的 URL 做 HTML 实体兜底解码，避免 &amp; 导致图片加载失败
+        const decode = (u) => u
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'");
+        const valid = images
+            .map(decode)
+            .filter(u => typeof u === 'string' && (u.startsWith('http://') || u.startsWith('https://')))
+            .slice(0, detail ? 8 : 1);
+        if (!valid.length) return '';
+        if (detail) {
+            const items = valid.map(u => `<img class="news-image-detail-item" loading="lazy" src="${escapeHtml(u)}" alt="配图" referrerpolicy="no-referrer">`).join('');
+            return `<div class="news-image-detail">${items}</div>`;
+        }
+        return `<div class="news-image-thumb"><img class="news-image-thumb-img" loading="lazy" src="${escapeHtml(valid[0])}" alt="配图" referrerpolicy="no-referrer"></div>`;
+    }
+
     function renderNewsCard(news, index) {
         const card = document.createElement('div');
         card.className = 'news-card';
@@ -2192,6 +2215,8 @@ const IS_ADMIN = !!reportPageData.isAdmin;
                     <div class="news-head">
                         <button class="news-title news-title-btn" type="button" data-action="open-news-detail" data-news-id="${news.id}">${escapeHtml(news.title || '(无标题)')}</button>
                     </div>
+
+                    ${renderNewsImages(news.images)}
 
                     <div class="meta-row news-meta-row">
                         <div class="meta-left">

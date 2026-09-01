@@ -1,4 +1,4 @@
-"""
+﻿"""
 本文件用于提供新闻查询构造和响应序列化工具，减少多个新闻接口中的重复筛选逻辑。
 主要函数:
 - `build_news_query_filters`: 为新闻查询统一追加时间、分类、地区和来源过滤条件
@@ -142,6 +142,7 @@ def serialize_news_item(news: News) -> dict[str, Any]:
         "time": news.publish_date.isoformat(),
         "summary": news.summary,
         "sources": news.sources,
+        "images": news.images or [],
         "category": news.category,
         "region": normalize_regions_to_countries(news.region),
         "sentiment_label": news.sentiment_label,

@@ -1,4 +1,4 @@
-"""
+﻿"""
 本文件用于加载项目运行配置：`.env` 仅保存管理员密码，其余配置读取 `config.yaml`。
 主要函数/类:
 - `Settings`: 运行时配置模型（支持类型校验与默认值）
@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     CRAWLER_PAGE_TIMEOUT_MS: int = 60000
     CRAWLER_RETRY_ATTEMPTS: int = 2
     CRAWLER_RETRY_DELAY_SECONDS: float = 8.0
+    # 新闻图片抓取开关与单条新闻图片数量上限
+    MEDIA_FETCH_ENABLED: bool = True
+    MEDIA_FETCH_MAX_IMAGES: int = 12
     CRAWLER_PROXY: str = ""
     EMBEDDING_CONCURRENCY: int = 5
     LLM_CONCURRENCY: int = 5

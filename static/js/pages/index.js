@@ -915,6 +915,7 @@
                     <span class="meta-sent-val ${sentimentClass(news.sentiment_label)}">${escapeHtml(news.sentiment_label || '未分析')}${news.sentiment_score !== undefined ? '：' + news.sentiment_score : ''}</span>
                     <button class="btn-link" type="button" data-action="trace-event" data-news-id="${news.id}" data-title="${attrEscape(news.title)}">溯源分析</button>
                 </div>
+                ${renderNewsImages(news.images, true)}
                 <div class="detail-status-grid">
                     <div><strong>${status.has_summary ? '已有摘要' : '暂无摘要'}</strong><span>新闻摘要</span></div>
                     <div><strong>${status.related_source_count || 0}</strong><span>关联报道</span></div>
@@ -1087,6 +1088,28 @@
             return `${month}/${day} ${hour}:${minute}`;
         }
 
+        // 渲染新闻配图缩略图（仅展示图片直链，过滤非法地址）
+        function renderNewsImages(images, detail = false) {
+            if (!Array.isArray(images) || !images.length) return '';
+            // 对已入库的 URL 做 HTML 实体兜底解码，避免 &amp; 导致图片加载失败
+            const decode = (u) => u
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'");
+            const valid = images
+                .map(decode)
+                .filter(u => typeof u === 'string' && (u.startsWith('http://') || u.startsWith('https://')))
+                .slice(0, detail ? 8 : 1);
+            if (!valid.length) return '';
+            if (detail) {
+                const items = valid.map(u => `<img class="news-image-detail-item" loading="lazy" src="${escapeHtml(u)}" alt="配图" referrerpolicy="no-referrer">`).join('');
+                return `<div class="news-image-detail">${items}</div>`;
+            }
+            return `<div class="news-image-thumb"><img class="news-image-thumb-img" loading="lazy" src="${escapeHtml(valid[0])}" alt="配图" referrerpolicy="no-referrer"></div>`;
+        }
+
         function renderNewsList() {
             els.newsList.innerHTML = '';
             state.list.forEach((item, index) => {
@@ -1111,6 +1134,8 @@
                             <div class="news-head">
                                 <button class="news-title news-title-btn" type="button" data-action="open-news-detail" data-news-id="${item.id}">${item.title}</button>
                             </div>
+
+                            ${renderNewsImages(item.images)}
 
                             <div class="meta-row news-meta-row">
                                 <div class="meta-left">

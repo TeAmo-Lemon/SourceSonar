@@ -1,4 +1,4 @@
-"""
+﻿"""
 本文件用于实现全网抓取与解析逻辑，包括 RSS/HTML 解析、内容抓取与入库等流程。
 主要类/对象:
 - `CrawlerService`: 抓取服务实现
@@ -36,6 +36,12 @@ from app.utils.json_news_payload import (
     ensure_unique_json_item_links,
     extract_json_news_items,
     normalize_json_news_item,
+)
+from app.utils.media_extractor import (
+    extract_image_urls_from_html,
+    extract_media_from_crawl_result,
+    is_supported_image_url,
+    pick_cover_image,
 )
 from app.utils.news_content_filter import is_blocked_access_item, is_blocked_access_text
 from app.utils.retry import retry_async_result
@@ -176,6 +182,52 @@ class CrawlerService:
 
         return max(10, int(getattr(settings, "CRAWLER_CONTENT_MIN_LENGTH", MIN_CONTENT_LENGTH) or MIN_CONTENT_LENGTH))
 
+    def _media_fetch_max_images(self) -> int:
+        """
+        输入:
+        - 无
+
+        输出:
+        - 单条新闻允许保存的最大图片数量
+
+        作用:
+        - 统一读取并约束图片上限，避免不同抓取路径产生不一致的入库数量。
+        """
+
+        return max(1, int(getattr(settings, "MEDIA_FETCH_MAX_IMAGES", 12) or 12))
+
+    def _normalize_image_urls(self, image_urls: Optional[List[str]]) -> List[str]:
+        """
+        输入:
+        - `image_urls`: 原始图片地址列表
+
+        输出:
+        - 去重、校验和限量后的 HTTP(S) 图片地址列表
+
+        作用:
+        - 统一处理 RSS、JSON 和正文页返回的图片地址，防止无效地址或重复资源进入数据库。
+        """
+
+        if not getattr(settings, "MEDIA_FETCH_ENABLED", True) or not image_urls:
+            return []
+
+        normalized: List[str] = []
+        seen: set[str] = set()
+        for raw_url in image_urls:
+            url = str(raw_url or "").strip()
+            if (
+                not url
+                or url in seen
+                or not url.startswith(("http://", "https://"))
+                or not is_supported_image_url(url, allow_extensionless=True)
+            ):
+                continue
+            seen.add(url)
+            normalized.append(url)
+            if len(normalized) >= self._media_fetch_max_images():
+                break
+        return normalized
+
     def _source_fetch_timeout(self) -> aiohttp.ClientTimeout:
         """
         输入:
@@ -239,31 +291,58 @@ class CrawlerService:
         candidates.sort(key=lambda item: item[0], reverse=True)
         return self._normalize_content_text(candidates[0][1])
 
-    async def crawl_content_light(self, target_url: str) -> Optional[str]:
+    async def crawl_content_light_with_media(self, target_url: str) -> Dict[str, Any]:
         """
-        以 HTTP + HTML 解析方式优先抓正文，避免大多数静态新闻页启动浏览器。
+        输入:
+        - `target_url`: 目标新闻页面 URL
+
+        输出:
+        - `{"content": 正文文本或 None, "images": 图片链接列表}`
+
+        作用:
+        - 以 HTTP + HTML 解析方式优先抓正文与配图，避免大多数静态新闻页启动浏览器。
         """
         try:
             timeout = aiohttp.ClientTimeout(total=20)
             async with aiohttp.ClientSession(headers=self._default_headers(), timeout=timeout) as session:
                 async with session.get(target_url, allow_redirects=True) as resp:
                     if resp.status != 200:
-                        return None
+                        return {"content": None, "images": []}
 
                     content_type = resp.headers.get("Content-Type", "")
                     if content_type and not any(t in content_type.lower() for t in ("html", "xml", "text")):
-                        return None
+                        return {"content": None, "images": []}
 
                     body = await resp.content.read(MAX_LIGHT_HTML_BYTES + 1)
                     if len(body) > MAX_LIGHT_HTML_BYTES:
                         logger.debug(f"   ⚠️ [轻量抓取] 页面过大，回退浏览器: {target_url}")
-                        return None
+                        return {"content": None, "images": []}
 
                     html = self._decode_response_body(body, content_type)
-                    return self._extract_article_text(html)
+                    text = self._extract_article_text(html)
+                    images = extract_image_urls_from_html(
+                        html,
+                        base_url=target_url,
+                        max_images=self._media_fetch_max_images(),
+                    )
+                    return {"content": text, "images": self._normalize_image_urls(images)}
         except Exception as e:
             logger.debug(f"   ⚠️ [轻量抓取] 失败，回退浏览器: {target_url} ({e})")
-            return None
+            return {"content": None, "images": []}
+
+    async def crawl_content_light(self, target_url: str) -> Optional[str]:
+        """
+        输入:
+        - `target_url`: 目标新闻页面 URL
+
+        输出:
+        - 页面正文文本；失败返回 None
+
+        作用:
+        - 以 HTTP + HTML 解析方式优先抓正文，避免大多数静态新闻页启动浏览器。
+        """
+        result = await self.crawl_content_light_with_media(target_url)
+        return result.get("content")
 
     def _make_browser_config(self):
         from crawl4ai import BrowserConfig
@@ -362,6 +441,22 @@ class CrawlerService:
         - 作为 crawl4ai 失败后的兜底抓取路径，处理部分站点在 crawl4ai 中导航超时或正文为空的问题。
         """
 
+        result = await self._crawl_content_with_playwright_media(target_url)
+        return result.get("content")
+
+    async def _crawl_content_with_playwright_media(self, target_url: str) -> Dict[str, Any]:
+        """
+        输入:
+        - `target_url`: 目标新闻页面 URL
+
+        输出:
+        - `{"content": 正文文本或 None, "images": 图片链接列表}`
+
+        作用:
+        - 在 Playwright 渲染动态页面后，同时从最终 DOM 提取正文和懒加载图片，
+          保证浏览器兜底路径不会遗漏多媒体资源。
+        """
+
         try:
             from playwright.async_api import async_playwright
 
@@ -385,13 +480,21 @@ class CrawlerService:
                     await page.goto(target_url, wait_until="domcontentloaded", timeout=timeout_ms)
                     await page.wait_for_timeout(int(wait_seconds * 1000))
                     html = await page.content()
-                    return self._extract_article_text(html)
+                    images = extract_image_urls_from_html(
+                        html,
+                        base_url=page.url or target_url,
+                        max_images=self._media_fetch_max_images(),
+                    )
+                    return {
+                        "content": self._extract_article_text(html),
+                        "images": self._normalize_image_urls(images),
+                    }
                 finally:
                     await context.close()
                     await browser.close()
         except Exception as e:
             logger.debug(f"   ⚠️ [Playwright兜底] 抓取失败: {target_url} ({e})")
-            return None
+            return {"content": None, "images": []}
 
     def _build_supported_config(self, config_cls, values: Dict[str, Any]):
         """
@@ -481,6 +584,7 @@ class CrawlerService:
         content: Optional[str] = None,
         heat: Optional[float] = None,
         original_url: Optional[str] = None,
+        images: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         输入:
@@ -493,6 +597,7 @@ class CrawlerService:
         - `content`: 可直接作为正文素材的内容（可选）
         - `heat`: 条目级热度（可选）
         - `original_url`: 来源原始链接（可选）
+        - `images`: 新闻页多媒体图片链接列表（可选）
 
         输出:
         - 清洗后的新闻元信息字典；不合规时返回 None
@@ -516,6 +621,8 @@ class CrawlerService:
         cleaned_summary = self._clean_summary(summary)
         cleaned_content = self._clean_summary(content)
 
+        cleaned_images = self._normalize_image_urls(images)
+
         return {
             "title": title.strip(),
             "url": url.strip(),
@@ -525,6 +632,7 @@ class CrawlerService:
             "summary": cleaned_summary,
             "content": cleaned_content,
             "original_url": (original_url or url).strip(),
+            "images": cleaned_images,
         }
 
     async def fetch_and_parse(
@@ -595,6 +703,7 @@ class CrawlerService:
                                 summary=item.get("summary"),
                                 content=item.get("content"),
                                 original_url=item.get("original_link"),
+                                images=item.get("images"),
                             )
                             if p:
                                 items.append(p)
@@ -633,6 +742,18 @@ class CrawlerService:
                                 summary = desc_elem.text if desc_elem else ""
                                 content = summary
 
+                                # 从 RSS 描述/内容中提取多媒体图片（若包含 HTML）
+                                rss_images: List[str] = []
+                                rss_html = (desc_elem.decode() if desc_elem else "")
+                                if rss_html and "<img" in rss_html.lower():
+                                    rss_images = extract_image_urls_from_html(rss_html, base_url=str(link or ""))
+                                # 同时读取 media:content / enclosure 中的图片
+                                for media_tag in item.find_all(["media:content", "enclosure"]):
+                                    media_url = media_tag.get("url") or media_tag.get("href") or ""
+                                    if media_url and pick_cover_image([media_url]):
+                                        rss_images.append(media_url)
+                                rss_images = self._normalize_image_urls(rss_images)
+
                                 pub_date = datetime.now()
                                 date_elem = item.find("pubDate") or item.find("dc:date") or item.find("updated")
                                 if date_elem and date_elem.text:
@@ -647,7 +768,7 @@ class CrawlerService:
                                     except Exception:
                                         pass
 
-                                p = self._process_meta(name, weight, title, link, pub_date, summary, content=content)
+                                p = self._process_meta(name, weight, title, link, pub_date, summary, content=content, images=rss_images)
                                 if p:
                                     items.append(p)
                             if items:
@@ -667,7 +788,8 @@ class CrawlerService:
                     extracted_items = await ai_service.extract_news_info(text)
                     for item in extracted_items:
                         p = self._process_meta(
-                            name, weight, item.get("title"), item.get("link"), datetime.now(), item.get("summary")
+                            name, weight, item.get("title"), item.get("link"), datetime.now(), item.get("summary"),
+                            images=item.get("images"),
                         )
                         if p:
                             items.append(p)
@@ -893,6 +1015,7 @@ class CrawlerService:
                     heat_score=item["heat"],
                     summary=item.get("summary", ""),
                     content=item.get("content", ""),
+                    images=item.get("images", []),
                     sources=[{"name": item["source"], "url": item.get("original_url", item["url"])}],
                     sentiment_score=item.get("sentiment_score", 50.0),
                     sentiment_label=item.get("sentiment_label", "中立"),
@@ -1148,6 +1271,84 @@ class CrawlerService:
 
         return await concurrency_service.run_crawler(do_crawl)
 
+    async def crawl_content_with_instance_media(self, target_url: str, crawler) -> Dict[str, Any]:
+        """
+        输入:
+        - `target_url`: 目标页面 URL
+        - `crawler`: 复用的爬虫实例
+
+        输出:
+        - `{"content": 正文文本或 None, "images": 图片链接列表}`
+
+        作用:
+        - 使用复用的爬虫实例抓取正文的同时提取多媒体图片，减少重复抓取开销。
+        """
+        if not crawler:
+            return await self.crawl_content_with_media(target_url)
+
+        async def do_crawl() -> Dict[str, Any]:
+            logger.debug(f"抓取新闻 (复用实例含媒体): {target_url}")
+
+            if self._is_weibo_url(target_url):
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        content = await self.crawl_weibo_content(session, target_url)
+                        return {"content": content, "images": []}
+                except Exception as e:
+                    logger.error(f"❌ 微博抓取失败: {e}")
+                    return {"content": None, "images": []}
+
+            # 优先轻量抓取，可同时拿到正文与配图
+            light = await self.crawl_content_light_with_media(target_url)
+            if light.get("content"):
+                return light
+            images: List[str] = list(light.get("images") or [])
+
+            try:
+                run_conf = self._make_run_config(dynamic_wait=False)
+                result = await crawler.arun(url=target_url, config=run_conf)
+                content = self._extract_crawl4ai_markdown(result)
+                images.extend(
+                    extract_media_from_crawl_result(
+                        result,
+                        base_url=target_url,
+                        max_images=self._media_fetch_max_images(),
+                    ).get("images", [])
+                )
+
+                if not content:
+                    logger.debug(f"   ⚠️ [浏览器抓取] 快速模式未获得正文，切换动态等待: {target_url}")
+                    dynamic_run_conf = self._make_run_config(dynamic_wait=True)
+                    dynamic_result = await crawler.arun(url=target_url, config=dynamic_run_conf)
+                    content = self._extract_crawl4ai_markdown(dynamic_result)
+                    images.extend(
+                        extract_media_from_crawl_result(
+                            dynamic_result,
+                            base_url=target_url,
+                            max_images=self._media_fetch_max_images(),
+                        ).get("images", [])
+                    )
+
+                if not content:
+                    logger.debug(f"   ⚠️ [浏览器抓取] crawl4ai 未获得正文，切换 Playwright 兜底: {target_url}")
+                    playwright_result = await self._crawl_content_with_playwright_media(target_url)
+                    content = playwright_result.get("content")
+                    images.extend(playwright_result.get("images") or [])
+
+                return {"content": content, "images": self._normalize_image_urls(images)}
+
+            except Exception as e:
+                logger.error(f"❌ 抓取失败: {e}")
+                logger.debug(f"   ⚠️ [浏览器抓取] crawl4ai 异常，切换 Playwright 兜底: {target_url}")
+                playwright_result = await self._crawl_content_with_playwright_media(target_url)
+                images.extend(playwright_result.get("images") or [])
+                return {
+                    "content": playwright_result.get("content"),
+                    "images": self._normalize_image_urls(images),
+                }
+
+        return await concurrency_service.run_crawler(do_crawl)
+
     async def crawl_content(self, target_url: str) -> Optional[str]:
         """
         输入:
@@ -1203,6 +1404,85 @@ class CrawlerService:
 
         return await concurrency_service.run_crawler(do_crawl)
 
+    async def crawl_content_with_media(self, target_url: str) -> Dict[str, Any]:
+        """
+        输入:
+        - `target_url`: 目标页面 URL
+
+        输出:
+        - `{"content": 正文文本或 None, "images": 图片链接列表}`
+
+        作用:
+        - 抓取新闻正文的同时提取新闻页多媒体图片（封面图与配图），
+          供入库流程同步保存，避免只存正文而丢失配图。
+        """
+        async def do_crawl() -> Dict[str, Any]:
+            logger.debug(f"抓取新闻(含媒体): {target_url}")
+
+            if self._is_weibo_url(target_url):
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        content = await self.crawl_weibo_content(session, target_url)
+                        return {"content": content, "images": []}
+                except Exception as e:
+                    logger.error(f"❌ 微博抓取失败: {e}")
+                    return {"content": None, "images": []}
+
+            # 优先轻量抓取，可同时拿到正文与配图
+            light = await self.crawl_content_light_with_media(target_url)
+            if light.get("content"):
+                return light
+
+            images: List[str] = list(light.get("images") or [])
+            content: Optional[str] = None
+
+            # 浏览器抓取（crawl4ai / Playwright 兜底）
+            try:
+                from crawl4ai import AsyncWebCrawler
+
+                browser_conf = self._make_browser_config()
+                run_conf = self._make_run_config(dynamic_wait=False)
+
+                async with AsyncWebCrawler(config=browser_conf) as crawler:
+                    result = await crawler.arun(url=target_url, config=run_conf)
+                    content = self._extract_crawl4ai_markdown(result)
+                    images.extend(
+                        extract_media_from_crawl_result(
+                            result,
+                            base_url=target_url,
+                            max_images=self._media_fetch_max_images(),
+                        ).get("images", [])
+                    )
+
+                    if not content:
+                        logger.debug(f"   ⚠️ [浏览器抓取] 快速模式未获得正文，切换动态等待: {target_url}")
+                        dynamic_run_conf = self._make_run_config(dynamic_wait=True)
+                        dynamic_result = await crawler.arun(url=target_url, config=dynamic_run_conf)
+                        content = self._extract_crawl4ai_markdown(dynamic_result)
+                        images.extend(
+                            extract_media_from_crawl_result(
+                                dynamic_result,
+                                base_url=target_url,
+                                max_images=self._media_fetch_max_images(),
+                            ).get("images", [])
+                        )
+
+                    if not content:
+                        logger.debug(f"   ⚠️ [浏览器抓取] crawl4ai 未获得正文，切换 Playwright 兜底: {target_url}")
+                        playwright_result = await self._crawl_content_with_playwright_media(target_url)
+                        content = playwright_result.get("content")
+                        images.extend(playwright_result.get("images") or [])
+            except Exception as e:
+                logger.error(f"❌ 抓取失败: {e}")
+                logger.debug(f"   ⚠️ [浏览器抓取] crawl4ai 异常，切换 Playwright 兜底: {target_url}")
+                playwright_result = await self._crawl_content_with_playwright_media(target_url)
+                content = playwright_result.get("content")
+                images.extend(playwright_result.get("images") or [])
+
+            return {"content": content, "images": self._normalize_image_urls(images)}
+
+        return await concurrency_service.run_crawler(do_crawl)
+
     async def crawl_with_retry(self, url: str, label: str = "正文抓取", min_length: Optional[int] = None) -> Optional[str]:
         """
         输入:
@@ -1217,17 +1497,38 @@ class CrawlerService:
         - 统一封装“正文抓取 + 重试 + 登录墙过滤”，消除各服务中重复的 crawl_once 闭包。
         """
 
+        result = await self.crawl_with_retry_media(url, label=label, min_length=min_length)
+        return result.get("content") if result else None
+
+    async def crawl_with_retry_media(self, url: str, label: str = "正文抓取", min_length: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """
+        输入:
+        - `url`: 新闻正文地址
+        - `label`: 日志标签
+        - `min_length`: 正文最小有效长度
+
+        输出:
+        - `{"content": 正文文本或 None, "images": 图片链接列表}`；失败返回 None
+
+        作用:
+        - 统一封装“正文抓取 + 重试 + 登录墙过滤 + 多媒体图片提取”，
+          供摘要与专题流程在补抓正文时同步保存新闻页配图。
+        """
+
         effective_min_length = max(10, int(min_length or getattr(settings, "CRAWLER_CONTENT_MIN_LENGTH", 30) or 30))
         retry_delay = max(1.0, float(getattr(settings, "CRAWLER_RETRY_DELAY_SECONDS", 8.0) or 8.0))
         fetch_timeout = max(5.0, float(getattr(settings, "CRAWLER_FETCH_TIMEOUT_SECONDS", 45.0) or 45.0))
         retry_attempts = max(1, int(getattr(settings, "CRAWLER_RETRY_ATTEMPTS", 2) or 2))
 
-        async def crawl_once() -> Optional[str]:
-            content = await self.crawl_content(url)
+        async def crawl_once() -> Optional[Dict[str, Any]]:
+            result = await self.crawl_content_with_media(url)
+            content = result.get("content")
             if content and is_blocked_access_text(content):
                 logger.info(f"   ⚠️ 正文为登录/受限提示，忽略该正文: {label}")
                 return None
-            return content
+            if content:
+                return result
+            return None
 
         return await retry_async_result(
             crawl_once,

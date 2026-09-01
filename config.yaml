@@ -1,4 +1,4 @@
-# ================= 基础配置 =================
+﻿# ================= 基础配置 =================
 # APP_NAME: 应用名称
 APP_NAME: SourceSonar
 # LOG_LEVEL: 日志等级: DEBUG, INFO, WARNING, ERROR
@@ -35,6 +35,10 @@ CRAWLER_PAGE_TIMEOUT_MS: 60000
 CRAWLER_RETRY_ATTEMPTS: 2
 # 正文补抓外层失败后再次尝试的等待秒数
 CRAWLER_RETRY_DELAY_SECONDS: 8.0
+# 是否抓取并保存新闻页多媒体图片（封面图与配图）。关闭可节省带宽与入库体积
+MEDIA_FETCH_ENABLED: true
+# 单条新闻最多保存的图片数量
+MEDIA_FETCH_MAX_IMAGES: 12
 
 # HTTP 代理地址（用于抓取被墙的境外源，如 Reddit；留空则不使用代理）
 # 例如 Clash/Clash Verge 的 mixed 端口: http://127.0.0.1:7897

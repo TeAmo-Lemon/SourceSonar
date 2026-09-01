@@ -1,4 +1,4 @@
-# 本文件用于规范化 JSON 新闻源载荷，兼容多种 API 返回结构和摘要字段命名。
+﻿# 本文件用于规范化 JSON 新闻源载荷，兼容多种 API 返回结构和摘要字段命名。
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ TITLE_FIELDS = ("title", "headline", "name")
 LINK_FIELDS = ("url", "link", "share_url", "mobileUrl", "mobile_url", "uri")
 SUMMARY_FIELDS = ("content", "description", "summary", "digest", "desc", "abstract", "brief", "text")
 DATE_FIELDS = ("publish_time", "published_at", "publish_date", "pub_date", "created_at", "updated_at", "time", "date", "publishedAt", "created_utc")
+IMAGE_FIELDS = ("image", "images", "thumbnail", "thumb", "cover", "urlToImage", "pic", "picture", "img", "image_url", "cover_url")
 
 
 class NormalizedJsonNewsItem(TypedDict, total=False):
@@ -33,6 +34,7 @@ class NormalizedJsonNewsItem(TypedDict, total=False):
     summary: str
     content: str
     publish_date: datetime
+    images: List[str]
 
 
 def _stringify_value(value: Any) -> str:
@@ -79,6 +81,55 @@ def _first_text(item: Mapping[str, Any], fields: tuple[str, ...]) -> str:
         if text:
             return text
     return ""
+
+
+def _collect_images(item: Mapping[str, Any]) -> List[str]:
+    """
+    输入:
+    - `item`: 单条 JSON 新闻对象
+
+    输出:
+    - 提取到的图片链接列表（已去重）
+
+    作用:
+    - 兼容不同新闻平台对配图字段的命名（image / images / thumbnail / pic 等），
+      供抓取入库时同步保存新闻页多媒体图片。
+    """
+
+    images: List[str] = []
+    for field in IMAGE_FIELDS:
+        value = item.get(field)
+        if value is None:
+            continue
+        if isinstance(value, list):
+            for sub in value:
+                if isinstance(sub, str):
+                    img = sub.strip()
+                elif isinstance(sub, dict):
+                    img = _stringify_value(sub.get("url") or sub.get("src") or "")
+                else:
+                    img = ""
+                if img and img.startswith(("http://", "https://")):
+                    images.append(img)
+        elif isinstance(value, dict):
+            img = _stringify_value(value.get("url") or value.get("src") or "")
+            if img and img.startswith(("http://", "https://")):
+                images.append(img)
+        else:
+            img = _stringify_value(value)
+            if img.startswith(("http://", "https://")):
+                images.append(img)
+    # 去重并限制数量，避免非图片字段被误收集
+    seen: set[str] = set()
+    result: List[str] = []
+    for img in images:
+        if img in seen:
+            continue
+        seen.add(img)
+        result.append(img)
+        if len(result) >= 12:
+            break
+    return result
 
 
 def _looks_like_news_item(value: Any) -> bool:
@@ -243,6 +294,10 @@ def normalize_json_news_item(item: Mapping[str, Any]) -> Optional[NormalizedJson
     if material:
         normalized["summary"] = material
         normalized["content"] = material
+
+    images = _collect_images(item)
+    if images:
+        normalized["images"] = images
 
     for date_value in _iter_date_candidates(item):
         parsed_date = parse_json_datetime(date_value)

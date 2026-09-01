@@ -1,4 +1,4 @@
-# app/services/topic_service.py
+﻿# app/services/topic_service.py
 
 from __future__ import annotations
 
@@ -1209,21 +1209,23 @@ class TopicService:
                 logger.info(f"   📥 正在补全新闻详情: {(news.title or '')[:20]}...")
                 retry_with_new_crawler = False
 
-                async def crawl_once() -> Optional[str]:
+                async def crawl_once() -> Optional[dict]:
                     """
                     输入:
                     - 无，闭包读取新闻 URL 与复用爬虫实例
 
                     输出:
-                    - 抓取到的正文；失败返回 None
+                    - 抓取结果字典 {"content": 正文, "images": [...]}；失败返回 None
 
                     作用:
-                    - 为重试工具提供单次正文抓取动作。
+                    - 为重试工具提供单次正文抓取动作，并同步返回多媒体图片。
                     """
 
                     if use_standalone_crawler or retry_with_new_crawler:
-                        return await crawler_service.crawl_content(news.url)
-                    return await crawler_service.crawl_content_with_instance(news.url, crawler)
+                        result = await crawler_service.crawl_content_with_media(news.url)
+                    else:
+                        result = await crawler_service.crawl_content_with_instance_media(news.url, crawler)
+                    return result if result.get("content") else None
 
                 async def switch_crawler_before_retry(next_attempt: int) -> None:
                     """
@@ -1259,7 +1261,12 @@ class TopicService:
                         logger.warning(f"   ⚠️ 无法获取正文，跳过新闻: {news.title}")
                     continue
 
-                news.content = crawled
+                crawled_content = crawled.get("content") or ""
+                news.content = crawled_content
+                # 同步保存新闻页多媒体图片
+                crawled_images = crawled.get("images") or []
+                if crawled_images and not news.images:
+                    news.images = crawled_images[: max(1, int(getattr(settings, "MEDIA_FETCH_MAX_IMAGES", 12) or 12))]
                 if not (news.summary or "").strip():
                     fresh_summary = await self.ai.generate_summary(news.title, news.content, max_words=200)
                     if fresh_summary:
@@ -1267,7 +1274,6 @@ class TopicService:
                         await refine_news_title_if_needed(news, summary=fresh_summary, content=news.content or "", ai=self.ai)
                 db.add(news)
                 ready_news.append(news)
-
         await db.flush()
         return ready_news
 

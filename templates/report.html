@@ -2,7 +2,7 @@
 {% extends "base.html" %}
 {% block title %}{{ settings.APP_NAME }} - 舆情分析报告{% endblock %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/pages/report.css?version=v0.1.10.0">
+<link rel="stylesheet" href="/static/css/pages/report.css?version=v0.1.11.0">
     <script src="/static/echarts.min.js"></script>
     <script src="/static/marked.min.js"></script>
 {% endblock %}
@@ -299,5 +299,5 @@
 {% endblock %}
 {% block scripts %}
 <script id="page-data" type="application/json">{{ {"newsCategories": settings.NEWS_CATEGORIES, "isAdmin": authed} | tojson }}</script>
-<script src="/static/js/pages/report.js?version=v0.1.8.6"></script>
+<script src="/static/js/pages/report.js?version=v0.1.9.0"></script>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""
+﻿"""
 本文件用于编排抓取、聚类、摘要与报告生成等全流程任务，并提供定时调度入口。
 主要函数:
 - `scheduled_task`: 定时调度循环
@@ -189,10 +189,14 @@ async def _process_summary_news_item(news_id: int, index: int, total: int) -> bo
             fallback_content = _fallback_summary_material(news)
             if not content and not fallback_content:
                 logger.debug(f"   {progress_str} 🕸️ 补抓正文: {news.title}")
-                crawled_content = await _crawl_content_with_retry(news.url, f"自动摘要正文补抓({news.id})")
-                if crawled_content:
+                crawled_result = await crawler_service.crawl_with_retry_media(news.url, f"自动摘要正文补抓({news.id})")
+                if crawled_result:
+                    crawled_content = crawled_result.get("content")
                     content = crawled_content
                     news.content = crawled_content
+                    # 同步保存新闻页多媒体图片
+                    if crawled_result.get("images") and not news.images:
+                        news.images = crawled_result["images"][: max(1, int(getattr(settings, "MEDIA_FETCH_MAX_IMAGES", 12) or 12))]
                     db.add(news)
                     await db.commit()
                 else:
@@ -519,9 +523,13 @@ async def auto_generate_summaries_categories_top_n() -> None:
                     fallback_content = _fallback_summary_material(news)
 
                     if not content and not fallback_content:
-                        content = await _crawl_content_with_retry(news.url, f"分类摘要正文补抓({news.id})")
-                        if content:
-                            news.content = content
+                        crawled_result = await crawler_service.crawl_with_retry_media(news.url, f"分类摘要正文补抓({news.id})")
+                        if crawled_result:
+                            crawled_content = crawled_result.get("content")
+                            content = crawled_content
+                            news.content = crawled_content
+                            if crawled_result.get("images") and not news.images:
+                                news.images = crawled_result["images"][: max(1, int(getattr(settings, "MEDIA_FETCH_MAX_IMAGES", 12) or 12))]
                             db.add(news)
                         else:
                             logger.warning(f"   [{cat}] ({i}/{len(news_to_process)}) ❌ 无法获取正文，跳过: {news.title}")
@@ -699,6 +707,102 @@ async def cleanup_blocked_news(lookback_days: int = 30, max_rows: int = 2000) ->
     return {"scanned": scanned, "deleted": deleted}
 
 
+async def auto_fill_news_images(limit: int = 40) -> int:
+    """
+    输入:
+    - `limit`: 本轮最多尝试补图的新闻数量
+
+    输出:
+    - 实际补充到图片的新闻数量
+
+    作用:
+    - 为已入库但缺少配图的高热度近期新闻补抓一次正文页图片，
+      解决部分 RSS/JSON 源首次入库未携带图片的情况。
+    """
+
+    if not getattr(settings, "MEDIA_FETCH_ENABLED", True):
+        return 0
+    if limit <= 0:
+        return 0
+
+    logger.info(f"🖼️ 开始补充新闻配图 (上限 {limit} 条)...")
+    try:
+        async with AsyncSessionLocal() as db:
+            time_window = datetime.now() - timedelta(days=max(1, int(getattr(settings, "TOPIC_LOOKBACK_DAYS", 3))))
+            # 优先选择真实新闻文章页，跳过常见聚合/快讯域名，避免无效抓取
+            stmt = (
+                select(News.id)
+                .where(News.publish_date >= time_window)
+                .where(or_(News.images.is_(None), News.images == []))
+                .order_by(desc(News.heat_score))
+                .limit(limit * 3)
+            )
+            result = await db.execute(stmt)
+            candidate_ids = result.scalars().all()
+
+        agg_hints = ("readhub", "reddit", "redd.it", "cls.cn/detail", "/detail/", "/topic/", "/p/", "weibo.com", "weibo.cn")
+        ids: list[int] = []
+        for news_id in candidate_ids:
+            # 重新取 url 做域名过滤
+            async with AsyncSessionLocal() as db:
+                res = await db.execute(select(News.url).where(News.id == news_id))
+                row = res.scalar_one_or_none()
+            if not row:
+                continue
+            url_lower = (row or "").lower()
+            if any(h in url_lower for h in agg_hints):
+                continue
+            ids.append(news_id)
+            if len(ids) >= limit:
+                break
+
+        if not ids:
+            logger.info("🖼️ 无需要补充配图的新闻")
+            return 0
+
+        concurrency = max(1, int(getattr(settings, "CRAWLER_CONCURRENCY", 2)))
+        sem = asyncio.Semaphore(concurrency)
+        filled = 0
+
+        async def fill_one(news_id: int) -> bool:
+            """
+            输入:
+            - `news_id`: 待补图新闻 ID
+
+            输出:
+            - 是否成功补充到图片
+
+            作用:
+            - 使用独立的数据库会话为单条新闻补抓配图，避免长事务与并发问题。
+            """
+            nonlocal filled
+            async with sem:
+                async with AsyncSessionLocal() as db:
+                    res = await db.execute(select(News).where(News.id == news_id))
+                    news = res.scalar_one_or_none()
+                    if news is None or news.images:
+                        return False
+                    try:
+                        media_result = await crawler_service.crawl_content_with_media(news.url)
+                        images = media_result.get("images") or []
+                        if images:
+                            news.images = images[: max(1, int(getattr(settings, "MEDIA_FETCH_MAX_IMAGES", 12) or 12))]
+                            db.add(news)
+                            await db.commit()
+                            filled += 1
+                            return True
+                    except Exception as exc:
+                        logger.warning(f"   ⚠️ 补图失败 ({news.id}): {exc}")
+                    return False
+
+        await asyncio.gather(*[fill_one(nid) for nid in ids])
+        logger.info(f"🖼️ 补图完成，新增 {filled} 条新闻配图")
+        return filled
+    except Exception as exc:
+        logger.error(f"❌ 补充新闻配图异常: {exc}")
+        return 0
+
+
 async def run_pipeline_task(generate_daily: bool = True, run_topic_task: bool = True) -> None:
     """
     输入:
@@ -730,6 +834,9 @@ async def run_pipeline_task(generate_daily: bool = True, run_topic_task: bool = 
             await auto_generate_summaries_categories_top_n()
 
             await auto_analyze_sentiment_top_n()
+
+            # 为入库但缺少配图的新闻补抓图片
+            await auto_fill_news_images()
 
             if generate_daily:
                 await report_service.generate_and_cache_global_report("daily")
