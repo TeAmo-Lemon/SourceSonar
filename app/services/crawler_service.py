@@ -38,6 +38,7 @@ from app.utils.json_news_payload import (
     normalize_json_news_item,
 )
 from app.utils.media_extractor import (
+    extract_av_urls_from_html,
     extract_image_urls_from_html,
     extract_media_from_crawl_result,
     is_supported_image_url,
@@ -196,6 +197,16 @@ class CrawlerService:
 
         return max(1, int(getattr(settings, "MEDIA_FETCH_MAX_IMAGES", 12) or 12))
 
+    def _media_fetch_max_videos(self) -> int:
+        """返回单条新闻允许保存的最大视频直链数量。"""
+
+        return max(0, int(getattr(settings, "MEDIA_FETCH_MAX_VIDEOS", 2) or 0))
+
+    def _media_fetch_max_audios(self) -> int:
+        """返回单条新闻允许保存的最大音频直链数量。"""
+
+        return max(0, int(getattr(settings, "MEDIA_FETCH_MAX_AUDIOS", 2) or 0))
+
     def _normalize_image_urls(self, image_urls: Optional[List[str]]) -> List[str]:
         """
         输入:
@@ -227,6 +238,33 @@ class CrawlerService:
             if len(normalized) >= self._media_fetch_max_images():
                 break
         return normalized
+
+    def _normalize_av_urls(self, urls: Optional[List[str]], *, kind: str) -> List[str]:
+        """去重、校验并限制可下载音视频直链，直播清单和网页地址不入库。"""
+
+        if not getattr(settings, "MEDIA_FETCH_ENABLED", True) or not urls:
+            return []
+        allowed = {".mp4", ".webm", ".mov", ".m4v"} if kind == "video" else {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".opus", ".flac"}
+        limit = self._media_fetch_max_videos() if kind == "video" else self._media_fetch_max_audios()
+        normalized: List[str] = []
+        for raw_url in urls:
+            url = str(raw_url or "").strip()
+            suffix = Path(urlparse(url).path).suffix.lower()
+            if url.startswith(("http://", "https://")) and (suffix in allowed or not suffix) and url not in normalized:
+                normalized.append(url)
+            if len(normalized) >= limit:
+                break
+        return normalized
+
+    def _normalize_media_result(self, content: Optional[str], media: Dict[str, List[str]]) -> Dict[str, Any]:
+        """统一构造正文与三类媒体链接的抓取结果。"""
+
+        return {
+            "content": content,
+            "images": self._normalize_image_urls(media.get("images")),
+            "videos": self._normalize_av_urls(media.get("videos"), kind="video"),
+            "audios": self._normalize_av_urls(media.get("audios"), kind="audio"),
+        }
 
     def _source_fetch_timeout(self) -> aiohttp.ClientTimeout:
         """
@@ -307,28 +345,30 @@ class CrawlerService:
             async with aiohttp.ClientSession(headers=self._default_headers(), timeout=timeout) as session:
                 async with session.get(target_url, allow_redirects=True) as resp:
                     if resp.status != 200:
-                        return {"content": None, "images": []}
+                        return self._normalize_media_result(None, {})
 
                     content_type = resp.headers.get("Content-Type", "")
                     if content_type and not any(t in content_type.lower() for t in ("html", "xml", "text")):
-                        return {"content": None, "images": []}
+                        return self._normalize_media_result(None, {})
 
                     body = await resp.content.read(MAX_LIGHT_HTML_BYTES + 1)
                     if len(body) > MAX_LIGHT_HTML_BYTES:
                         logger.debug(f"   ⚠️ [轻量抓取] 页面过大，回退浏览器: {target_url}")
-                        return {"content": None, "images": []}
+                        return self._normalize_media_result(None, {})
 
                     html = self._decode_response_body(body, content_type)
                     text = self._extract_article_text(html)
-                    images = extract_image_urls_from_html(
+                    media = extract_media_from_crawl_result(
                         html,
                         base_url=target_url,
                         max_images=self._media_fetch_max_images(),
+                        max_videos=self._media_fetch_max_videos(),
+                        max_audios=self._media_fetch_max_audios(),
                     )
-                    return {"content": text, "images": self._normalize_image_urls(images)}
+                    return self._normalize_media_result(text, media)
         except Exception as e:
             logger.debug(f"   ⚠️ [轻量抓取] 失败，回退浏览器: {target_url} ({e})")
-            return {"content": None, "images": []}
+            return self._normalize_media_result(None, {})
 
     async def crawl_content_light(self, target_url: str) -> Optional[str]:
         """
@@ -480,21 +520,20 @@ class CrawlerService:
                     await page.goto(target_url, wait_until="domcontentloaded", timeout=timeout_ms)
                     await page.wait_for_timeout(int(wait_seconds * 1000))
                     html = await page.content()
-                    images = extract_image_urls_from_html(
+                    media = extract_media_from_crawl_result(
                         html,
                         base_url=page.url or target_url,
                         max_images=self._media_fetch_max_images(),
+                        max_videos=self._media_fetch_max_videos(),
+                        max_audios=self._media_fetch_max_audios(),
                     )
-                    return {
-                        "content": self._extract_article_text(html),
-                        "images": self._normalize_image_urls(images),
-                    }
+                    return self._normalize_media_result(self._extract_article_text(html), media)
                 finally:
                     await context.close()
                     await browser.close()
         except Exception as e:
             logger.debug(f"   ⚠️ [Playwright兜底] 抓取失败: {target_url} ({e})")
-            return {"content": None, "images": []}
+            return self._normalize_media_result(None, {})
 
     def _build_supported_config(self, config_cls, values: Dict[str, Any]):
         """
@@ -585,6 +624,8 @@ class CrawlerService:
         heat: Optional[float] = None,
         original_url: Optional[str] = None,
         images: Optional[List[str]] = None,
+        videos: Optional[List[str]] = None,
+        audios: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         输入:
@@ -598,6 +639,7 @@ class CrawlerService:
         - `heat`: 条目级热度（可选）
         - `original_url`: 来源原始链接（可选）
         - `images`: 新闻页多媒体图片链接列表（可选）
+        - `videos` / `audios`: 新闻页可下载音视频直链（可选）
 
         输出:
         - 清洗后的新闻元信息字典；不合规时返回 None
@@ -622,6 +664,8 @@ class CrawlerService:
         cleaned_content = self._clean_summary(content)
 
         cleaned_images = self._normalize_image_urls(images)
+        cleaned_videos = self._normalize_av_urls(videos, kind="video")
+        cleaned_audios = self._normalize_av_urls(audios, kind="audio")
 
         return {
             "title": title.strip(),
@@ -633,6 +677,8 @@ class CrawlerService:
             "content": cleaned_content,
             "original_url": (original_url or url).strip(),
             "images": cleaned_images,
+            "videos": cleaned_videos,
+            "audios": cleaned_audios,
         }
 
     async def fetch_and_parse(
@@ -704,6 +750,8 @@ class CrawlerService:
                                 content=item.get("content"),
                                 original_url=item.get("original_link"),
                                 images=item.get("images"),
+                                videos=item.get("videos"),
+                                audios=item.get("audios"),
                             )
                             if p:
                                 items.append(p)
@@ -745,14 +793,30 @@ class CrawlerService:
                                 # 从 RSS 描述/内容中提取多媒体图片（若包含 HTML）
                                 rss_images: List[str] = []
                                 rss_html = (desc_elem.decode() if desc_elem else "")
+                                rss_media = extract_media_from_crawl_result(
+                                    rss_html,
+                                    base_url=str(link or ""),
+                                    max_images=self._media_fetch_max_images(),
+                                    max_videos=self._media_fetch_max_videos(),
+                                    max_audios=self._media_fetch_max_audios(),
+                                )
                                 if rss_html and "<img" in rss_html.lower():
-                                    rss_images = extract_image_urls_from_html(rss_html, base_url=str(link or ""))
+                                    rss_images = rss_media.get("images", [])
                                 # 同时读取 media:content / enclosure 中的图片
                                 for media_tag in item.find_all(["media:content", "enclosure"]):
                                     media_url = media_tag.get("url") or media_tag.get("href") or ""
                                     if media_url and pick_cover_image([media_url]):
                                         rss_images.append(media_url)
                                 rss_images = self._normalize_image_urls(rss_images)
+                                rss_videos = list(rss_media.get("videos", []))
+                                rss_audios = list(rss_media.get("audios", []))
+                                for media_tag in item.find_all(["media:content", "enclosure"]):
+                                    media_url = media_tag.get("url") or media_tag.get("href") or ""
+                                    media_type = str(media_tag.get("type") or "").lower()
+                                    if media_type.startswith("video/"):
+                                        rss_videos.append(media_url)
+                                    elif media_type.startswith("audio/"):
+                                        rss_audios.append(media_url)
 
                                 pub_date = datetime.now()
                                 date_elem = item.find("pubDate") or item.find("dc:date") or item.find("updated")
@@ -768,7 +832,10 @@ class CrawlerService:
                                     except Exception:
                                         pass
 
-                                p = self._process_meta(name, weight, title, link, pub_date, summary, content=content, images=rss_images)
+                                p = self._process_meta(
+                                    name, weight, title, link, pub_date, summary, content=content,
+                                    images=rss_images, videos=rss_videos, audios=rss_audios,
+                                )
                                 if p:
                                     items.append(p)
                             if items:
@@ -971,6 +1038,8 @@ class CrawlerService:
                     "title": item.get("title", ""),
                     "summary": item.get("summary") or item.get("content") or "",
                     "images": item.get("images") or [],
+                    "videos": item.get("videos") or [],
+                    "audios": item.get("audios") or [],
                 }
                 for idx, item in enumerate(final_list)
             ]
@@ -996,6 +1065,8 @@ class CrawlerService:
                             item["keywords"] = result.get("keywords", item.get("keywords", []))
                             item["entities"] = result.get("entities", item.get("entities", []))
                             item["visual_analysis"] = result.get("visual_analysis", item.get("visual_analysis", {}))
+                            item["audio_transcript"] = result.get("audio_transcript")
+                            item["media_analysis"] = result.get("media_analysis", {})
                             item["analysis_mode"] = result.get("analysis_mode", item.get("analysis_mode", "text"))
                             item["analysis_model"] = result.get("analysis_model", item.get("analysis_model"))
                         filtered_list.append(item)
@@ -1020,10 +1091,14 @@ class CrawlerService:
                     summary=item.get("summary", ""),
                     content=item.get("content", ""),
                     images=item.get("images", []),
+                    videos=item.get("videos", []),
+                    audios=item.get("audios", []),
                     sources=[{"name": item["source"], "url": item.get("original_url", item["url"])}],
                     sentiment_score=item.get("sentiment_score", 50.0),
                     sentiment_label=item.get("sentiment_label", "中立"),
                     visual_analysis=item.get("visual_analysis", {}),
+                    audio_transcript=item.get("audio_transcript"),
+                    media_analysis=item.get("media_analysis", {}),
                     analysis_mode=item.get("analysis_mode", "text"),
                     analysis_model=item.get("analysis_model"),
                     category=item.get("category", "其他"),
@@ -1310,49 +1385,60 @@ class CrawlerService:
             if light.get("content"):
                 return light
             images: List[str] = list(light.get("images") or [])
+            videos: List[str] = list(light.get("videos") or [])
+            audios: List[str] = list(light.get("audios") or [])
 
             try:
                 run_conf = self._make_run_config(dynamic_wait=False)
                 result = await crawler.arun(url=target_url, config=run_conf)
                 content = self._extract_crawl4ai_markdown(result)
-                images.extend(
-                    extract_media_from_crawl_result(
-                        result,
-                        base_url=target_url,
-                        max_images=self._media_fetch_max_images(),
-                    ).get("images", [])
+                media_result = extract_media_from_crawl_result(
+                    result,
+                    base_url=target_url,
+                    max_images=self._media_fetch_max_images(),
+                    max_videos=self._media_fetch_max_videos(),
+                    max_audios=self._media_fetch_max_audios(),
                 )
+                images.extend(media_result.get("images", []))
+                videos.extend(media_result.get("videos", []))
+                audios.extend(media_result.get("audios", []))
 
                 if not content:
                     logger.debug(f"   ⚠️ [浏览器抓取] 快速模式未获得正文，切换动态等待: {target_url}")
                     dynamic_run_conf = self._make_run_config(dynamic_wait=True)
                     dynamic_result = await crawler.arun(url=target_url, config=dynamic_run_conf)
                     content = self._extract_crawl4ai_markdown(dynamic_result)
-                    images.extend(
-                        extract_media_from_crawl_result(
-                            dynamic_result,
-                            base_url=target_url,
-                            max_images=self._media_fetch_max_images(),
-                        ).get("images", [])
+                    media_result = extract_media_from_crawl_result(
+                        dynamic_result,
+                        base_url=target_url,
+                        max_images=self._media_fetch_max_images(),
+                        max_videos=self._media_fetch_max_videos(),
+                        max_audios=self._media_fetch_max_audios(),
                     )
+                    images.extend(media_result.get("images", []))
+                    videos.extend(media_result.get("videos", []))
+                    audios.extend(media_result.get("audios", []))
 
                 if not content:
                     logger.debug(f"   ⚠️ [浏览器抓取] crawl4ai 未获得正文，切换 Playwright 兜底: {target_url}")
                     playwright_result = await self._crawl_content_with_playwright_media(target_url)
                     content = playwright_result.get("content")
                     images.extend(playwright_result.get("images") or [])
+                    videos.extend(playwright_result.get("videos") or [])
+                    audios.extend(playwright_result.get("audios") or [])
 
-                return {"content": content, "images": self._normalize_image_urls(images)}
+                return self._normalize_media_result(content, {"images": images, "videos": videos, "audios": audios})
 
             except Exception as e:
                 logger.error(f"❌ 抓取失败: {e}")
                 logger.debug(f"   ⚠️ [浏览器抓取] crawl4ai 异常，切换 Playwright 兜底: {target_url}")
                 playwright_result = await self._crawl_content_with_playwright_media(target_url)
                 images.extend(playwright_result.get("images") or [])
-                return {
-                    "content": playwright_result.get("content"),
-                    "images": self._normalize_image_urls(images),
-                }
+                videos.extend(playwright_result.get("videos") or [])
+                audios.extend(playwright_result.get("audios") or [])
+                return self._normalize_media_result(
+                    playwright_result.get("content"), {"images": images, "videos": videos, "audios": audios}
+                )
 
         return await concurrency_service.run_crawler(do_crawl)
 
@@ -1441,6 +1527,8 @@ class CrawlerService:
                 return light
 
             images: List[str] = list(light.get("images") or [])
+            videos: List[str] = list(light.get("videos") or [])
+            audios: List[str] = list(light.get("audios") or [])
             content: Optional[str] = None
 
             # 浏览器抓取（crawl4ai / Playwright 兜底）
@@ -1453,40 +1541,50 @@ class CrawlerService:
                 async with AsyncWebCrawler(config=browser_conf) as crawler:
                     result = await crawler.arun(url=target_url, config=run_conf)
                     content = self._extract_crawl4ai_markdown(result)
-                    images.extend(
-                        extract_media_from_crawl_result(
-                            result,
-                            base_url=target_url,
-                            max_images=self._media_fetch_max_images(),
-                        ).get("images", [])
+                    media_result = extract_media_from_crawl_result(
+                        result,
+                        base_url=target_url,
+                        max_images=self._media_fetch_max_images(),
+                        max_videos=self._media_fetch_max_videos(),
+                        max_audios=self._media_fetch_max_audios(),
                     )
+                    images.extend(media_result.get("images", []))
+                    videos.extend(media_result.get("videos", []))
+                    audios.extend(media_result.get("audios", []))
 
                     if not content:
                         logger.debug(f"   ⚠️ [浏览器抓取] 快速模式未获得正文，切换动态等待: {target_url}")
                         dynamic_run_conf = self._make_run_config(dynamic_wait=True)
                         dynamic_result = await crawler.arun(url=target_url, config=dynamic_run_conf)
                         content = self._extract_crawl4ai_markdown(dynamic_result)
-                        images.extend(
-                            extract_media_from_crawl_result(
-                                dynamic_result,
-                                base_url=target_url,
-                                max_images=self._media_fetch_max_images(),
-                            ).get("images", [])
+                        media_result = extract_media_from_crawl_result(
+                            dynamic_result,
+                            base_url=target_url,
+                            max_images=self._media_fetch_max_images(),
+                            max_videos=self._media_fetch_max_videos(),
+                            max_audios=self._media_fetch_max_audios(),
                         )
+                        images.extend(media_result.get("images", []))
+                        videos.extend(media_result.get("videos", []))
+                        audios.extend(media_result.get("audios", []))
 
                     if not content:
                         logger.debug(f"   ⚠️ [浏览器抓取] crawl4ai 未获得正文，切换 Playwright 兜底: {target_url}")
                         playwright_result = await self._crawl_content_with_playwright_media(target_url)
                         content = playwright_result.get("content")
                         images.extend(playwright_result.get("images") or [])
+                        videos.extend(playwright_result.get("videos") or [])
+                        audios.extend(playwright_result.get("audios") or [])
             except Exception as e:
                 logger.error(f"❌ 抓取失败: {e}")
                 logger.debug(f"   ⚠️ [浏览器抓取] crawl4ai 异常，切换 Playwright 兜底: {target_url}")
                 playwright_result = await self._crawl_content_with_playwright_media(target_url)
                 content = playwright_result.get("content")
                 images.extend(playwright_result.get("images") or [])
+                videos.extend(playwright_result.get("videos") or [])
+                audios.extend(playwright_result.get("audios") or [])
 
-            return {"content": content, "images": self._normalize_image_urls(images)}
+            return self._normalize_media_result(content, {"images": images, "videos": videos, "audios": audios})
 
         return await concurrency_service.run_crawler(do_crawl)
 

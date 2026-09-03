@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from io import BytesIO
 from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import urlparse
 
 import aiohttp
+from PIL import Image
 
 from app.utils.media_extractor import is_supported_image_url
 
@@ -21,11 +23,22 @@ _UNSUPPORTED_IMAGE_HOSTS = {"styles.redditmedia.com", "v.redd.it"}
 _UNSUPPORTED_MEDIA_SUFFIXES = (".m3u8", ".mp4", ".webm", ".mov", ".avi")
 
 
-def _is_data_image_uri(value: str) -> bool:
+def is_data_image_uri(value: str) -> bool:
     """判断值是否为允许发送到硅基流动的 base64 图片数据 URI。"""
 
     lowered = value.lower()
     return lowered.startswith(tuple(f"data:{mime};base64," for mime in _SUPPORTED_IMAGE_MIME_TYPES))
+
+
+def _is_valid_image_binary(content: bytes) -> bool:
+    """校验下载结果确实是完整可读取的图片，避免把截断响应发送给模型。"""
+
+    try:
+        with Image.open(BytesIO(content)) as image:
+            image.verify()
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def normalize_multimodal_image_urls(
@@ -97,19 +110,27 @@ async def prepare_multimodal_image_inputs(
     if not image_urls or target_count <= 0:
         return []
 
+    inline_images: List[str] = []
+    for raw_url in image_urls:
+        value = str(raw_url or "").strip()
+        if is_data_image_uri(value) and value not in inline_images:
+            inline_images.append(value)
+        if len(inline_images) >= target_count:
+            return inline_images
+
     candidates = normalize_multimodal_image_urls(
         image_urls,
-        max_images=max(target_count * 4, target_count),
+        max_images=max((target_count - len(inline_images)) * 4, target_count),
     )
     if not candidates:
-        return []
+        return inline_images
 
     safe_bytes = max(1, int(max_bytes))
     timeout = aiohttp.ClientTimeout(total=max(1.0, float(timeout_seconds)))
     request_headers = {"Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"}
     if headers:
         request_headers.update(headers)
-    data_uris: List[str] = []
+    data_uris: List[str] = list(inline_images)
 
     async with aiohttp.ClientSession(timeout=timeout, headers=request_headers) as session:
         for url in candidates:
@@ -118,8 +139,15 @@ async def prepare_multimodal_image_inputs(
                     content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
                     if response.status != 200 or content_type not in _SUPPORTED_IMAGE_MIME_TYPES:
                         continue
-                    content = await response.content.read(safe_bytes + 1)
-                    if not content or len(content) > safe_bytes:
+                    chunks: List[bytes] = []
+                    size = 0
+                    async for chunk in response.content.iter_chunked(64 * 1024):
+                        size += len(chunk)
+                        if size > safe_bytes:
+                            break
+                        chunks.append(chunk)
+                    content = b"".join(chunks)
+                    if not content or size > safe_bytes or not _is_valid_image_binary(content):
                         continue
                     encoded = base64.b64encode(content).decode("ascii")
                     data_uris.append(f"data:{content_type};base64,{encoded}")
@@ -164,7 +192,7 @@ def build_multimodal_chat_messages(
     images: List[str] = []
     for raw_url in image_urls or []:
         value = str(raw_url or "").strip()
-        if _is_data_image_uri(value):
+        if is_data_image_uri(value):
             images.append(value)
         if len(images) >= max_images:
             break

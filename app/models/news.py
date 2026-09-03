@@ -50,6 +50,9 @@ class News(Base):
 
     # 新闻页多媒体图片链接列表（JSON 数组，保存抓取时提取到的图片）
     images = Column(JSON, default=list)
+    # 新闻页可下载的视频和音频直链；原始媒体文件不永久保存
+    videos = Column(JSON, default=list)
+    audios = Column(JSON, default=list)
 
     heat_score = Column(Float, default=0.0, index=True)
     publish_date = Column(DateTime, default=datetime.now, index=True)
@@ -65,6 +68,9 @@ class News(Base):
     sentiment_label = Column(String, default="中立")
     # 保存图片理解摘要、视觉情绪线索和图文一致性，便于复核多模态分析依据
     visual_analysis = Column(JSON, default=dict)
+    # 保存音频转写与视频抽帧处理信息，便于复核多媒体结论来源
+    audio_transcript = Column(Text, nullable=True)
+    media_analysis = Column(JSON, default=dict)
     analysis_mode = Column(String, default="text")
     analysis_model = Column(String, nullable=True)
     category = Column(String, default="其他")

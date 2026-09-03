@@ -900,6 +900,29 @@
             `;
         }
 
+        // 渲染音视频处理结果，媒体文件仅临时处理，页面只展示可追溯的链接与转写文本。
+        function renderMediaAnalysis(news) {
+            const media = news && news.media_analysis;
+            const transcript = String((news && news.audio_transcript) || '').trim();
+            const videos = Array.isArray(news && news.videos) ? news.videos : [];
+            const audios = Array.isArray(news && news.audios) ? news.audios : [];
+            if ((!media || typeof media !== 'object') && !transcript && !videos.length && !audios.length) return '';
+            const links = [
+                ...videos.map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">视频 ${index + 1}</a>`),
+                ...audios.map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">音频 ${index + 1}</a>`),
+            ];
+            return `
+                <div class="detail-section multimodal-analysis-card">
+                    <div class="detail-section-title">
+                        <span>音视频分析</span>
+                        <span class="multimodal-badge">关键帧 ${Number(media?.frame_count || 0)} · 转写 ${Number(media?.transcript_count || 0)}</span>
+                    </div>
+                    ${transcript ? `<div class="multimodal-evidence"><strong>语音转写</strong>${escapeHtml(transcript)}</div>` : '<div class="detail-empty">未识别到可转写的语音内容。</div>'}
+                    ${links.length ? `<div class="multimodal-meta">原始媒体：${links.join(' · ')}</div>` : ''}
+                </div>
+            `;
+        }
+
         function renderNewsDetail(data) {
             const news = data.news || {};
             const status = data.content_status || {};
@@ -939,6 +962,7 @@
                 </div>
                 ${renderNewsImages(news.images, true)}
                 ${renderVisualAnalysis(news)}
+                ${renderMediaAnalysis(news)}
                 <div class="detail-status-grid">
                     <div><strong>${status.has_summary ? '已有摘要' : '暂无摘要'}</strong><span>新闻摘要</span></div>
                     <div><strong>${status.related_source_count || 0}</strong><span>关联报道</span></div>

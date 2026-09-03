@@ -112,6 +112,16 @@ class Settings(BaseSettings):
     # 新闻图片抓取开关与单条新闻图片数量上限
     MEDIA_FETCH_ENABLED: bool = True
     MEDIA_FETCH_MAX_IMAGES: int = 12
+    MEDIA_FETCH_MAX_VIDEOS: int = 2
+    MEDIA_FETCH_MAX_AUDIOS: int = 2
+    # 音视频仅临时下载、处理完成即清理，以下参数用于限制资源消耗
+    MEDIA_ANALYSIS_ENABLED: bool = True
+    MEDIA_DOWNLOAD_MAX_BYTES: int = 50 * 1024 * 1024
+    MEDIA_DOWNLOAD_TIMEOUT_SECONDS: float = 30.0
+    MEDIA_VIDEO_MAX_SECONDS: int = 120
+    MEDIA_VIDEO_MAX_FRAMES: int = 8
+    MEDIA_FFMPEG_PATH: str = "ffmpeg"
+    MEDIA_AUDIO_TRANSCRIPTION_MODEL: str = "FunAudioLLM/SenseVoiceSmall"
     CRAWLER_PROXY: str = ""
     EMBEDDING_CONCURRENCY: int = 5
     LLM_CONCURRENCY: int = 5

@@ -75,6 +75,8 @@ async def _analyze_single_news(
                 news_item.title,
                 text,
                 images=news_item.images or [],
+                videos=news_item.videos or [],
+                audios=news_item.audios or [],
             )
         except AIServiceUnavailableError:
             raise
@@ -103,6 +105,8 @@ def _apply_analysis_result(news_item: News, res: Dict[str, Any]) -> None:
     news_item.keywords = res.get("keywords", [])
     news_item.entities = res.get("entities", [])
     news_item.visual_analysis = res.get("visual_analysis", {})
+    news_item.audio_transcript = res.get("audio_transcript")
+    news_item.media_analysis = res.get("media_analysis", {})
     news_item.analysis_mode = res.get("analysis_mode", "text")
     news_item.analysis_model = res.get("analysis_model")
 
@@ -211,6 +215,10 @@ async def _process_summary_news_item(news_id: int, index: int, total: int) -> bo
                     # 同步保存新闻页多媒体图片
                     if crawled_result.get("images") and not news.images:
                         news.images = crawled_result["images"][: max(1, int(getattr(settings, "MEDIA_FETCH_MAX_IMAGES", 12) or 12))]
+                    if crawled_result.get("videos") and not news.videos:
+                        news.videos = crawled_result["videos"][: max(0, int(getattr(settings, "MEDIA_FETCH_MAX_VIDEOS", 2) or 0))]
+                    if crawled_result.get("audios") and not news.audios:
+                        news.audios = crawled_result["audios"][: max(0, int(getattr(settings, "MEDIA_FETCH_MAX_AUDIOS", 2) or 0))]
                     db.add(news)
                     await db.commit()
                 else:
@@ -255,6 +263,8 @@ async def _process_summary_news_item(news_id: int, index: int, total: int) -> bo
                         news.title,
                         summary,
                         images=news.images or [],
+                        videos=news.videos or [],
+                        audios=news.audios or [],
                     )
                     if res:
                         _apply_analysis_result(news, res)
@@ -413,6 +423,8 @@ async def auto_batch_analyze_new_news() -> None:
                     "title": n.title,
                     "summary": n.summary or "",
                     "images": n.images or [],
+                    "videos": n.videos or [],
+                    "audios": n.audios or [],
                 }
                 for n in batch
             ]
@@ -434,6 +446,8 @@ async def auto_batch_analyze_new_news() -> None:
                     if res.get("entities"):
                         news.entities = res["entities"]
                     news.visual_analysis = res.get("visual_analysis", {})
+                    news.audio_transcript = res.get("audio_transcript")
+                    news.media_analysis = res.get("media_analysis", {})
                     news.analysis_mode = res.get("analysis_mode", "text")
                     news.analysis_model = res.get("analysis_model")
                     updates += 1
@@ -559,6 +573,10 @@ async def auto_generate_summaries_categories_top_n() -> None:
                             news.content = crawled_content
                             if crawled_result.get("images") and not news.images:
                                 news.images = crawled_result["images"][: max(1, int(getattr(settings, "MEDIA_FETCH_MAX_IMAGES", 12) or 12))]
+                            if crawled_result.get("videos") and not news.videos:
+                                news.videos = crawled_result["videos"][: max(0, int(getattr(settings, "MEDIA_FETCH_MAX_VIDEOS", 2) or 0))]
+                            if crawled_result.get("audios") and not news.audios:
+                                news.audios = crawled_result["audios"][: max(0, int(getattr(settings, "MEDIA_FETCH_MAX_AUDIOS", 2) or 0))]
                             db.add(news)
                         else:
                             logger.warning(f"   [{cat}] ({i}/{len(news_to_process)}) ❌ 无法获取正文，跳过: {news.title}")
@@ -812,6 +830,11 @@ async def auto_fill_news_images(limit: int = 40) -> int:
                         images = media_result.get("images") or []
                         if images:
                             news.images = images[: max(1, int(getattr(settings, "MEDIA_FETCH_MAX_IMAGES", 12) or 12))]
+                        if media_result.get("videos"):
+                            news.videos = media_result["videos"][: max(0, int(getattr(settings, "MEDIA_FETCH_MAX_VIDEOS", 2) or 0))]
+                        if media_result.get("audios"):
+                            news.audios = media_result["audios"][: max(0, int(getattr(settings, "MEDIA_FETCH_MAX_AUDIOS", 2) or 0))]
+                        if images or media_result.get("videos") or media_result.get("audios"):
                             db.add(news)
                             await db.commit()
                             filled += 1

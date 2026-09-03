@@ -22,6 +22,7 @@ from app.core.logger import setup_logger
 from app.core.exceptions import AIConfigurationError, AIServiceUnavailableError
 from app.core.prompts import prompt_manager
 from app.services.concurrency_service import concurrency_service
+from app.services.media_processing_service import AudioPayload, media_processing_service
 from app.utils.multimodal_message import (
     build_multimodal_chat_messages,
     normalize_multimodal_image_urls,
@@ -1017,6 +1018,8 @@ class AIService:
         title: str,
         content: str = "",
         images: Optional[Sequence[Any]] = None,
+        videos: Optional[Sequence[Any]] = None,
+        audios: Optional[Sequence[Any]] = None,
         follow_keywords: str = "",
     ) -> Dict[str, Any]:
         """
@@ -1024,26 +1027,57 @@ class AIService:
         - `title`: 新闻标题
         - `content`: 新闻摘要或正文（可选）
         - `images`: 新闻封面图与正文配图地址（可选）
+        - `videos`: 新闻视频直链（可选），将抽取关键帧与音轨
+        - `audios`: 新闻音频直链（可选），将转写为文本
         - `follow_keywords`: 关注关键词；不为空时额外返回 follow_match
 
         输出:
         - 情感分析结果（score/label/category/region/keywords/entities）
 
         作用:
-        - 使用硅基流动 Qwen3-VL 综合分析新闻文本与图片，并保存视觉分析依据
+        - 使用硅基流动 Qwen3-VL 综合分析新闻文本、图片、视频关键帧和音频转写，并保存依据
         """
+
+        evidence = await media_processing_service.prepare_evidence(videos, audios)
+        transcripts: List[str] = []
+        for payload in evidence.audio_payloads:
+            transcript = await self._transcribe_audio(payload)
+            if transcript:
+                transcripts.append(transcript)
+        transcript_text = "\n\n".join(transcripts).strip()
+        enriched_content = str(content or "")
+        if transcript_text:
+            enriched_content = (
+                f"{enriched_content}\n\n【音视频语音转写】\n{transcript_text[:6000]}"
+            ).strip()
 
         categories_str = self._format_category_options()
         system_prompt = prompt_manager.get_system_prompt("sentiment_analysis_single", categories_str=categories_str)
         system_prompt = self._append_multimodal_sentiment_instruction(system_prompt)
         system_prompt = self._append_follow_keywords_instruction(system_prompt, follow_keywords)
-        user_prompt = prompt_manager.get_user_prompt("sentiment_analysis_single", title=title, content=content[:1000])
+        if transcript_text:
+            system_prompt += "\n音视频转写仅代表可辨识语音，请与标题、正文和关键帧交叉核验后再判断内容与情感。"
+        user_prompt = prompt_manager.get_user_prompt("sentiment_analysis_single", title=title, content=enriched_content[:7000])
+        combined_images = [*evidence.frame_data_uris, *(images or [])]
 
         res, analysis_mode, analysis_model, image_count = await self._call_sentiment_model(
             user_prompt,
             system_prompt,
-            image_urls=images,
+            image_urls=combined_images,
         )
+        media_details = evidence.to_public_dict(transcript_count=len(transcripts))
+
+        def attach_media_details(result: Dict[str, Any]) -> Dict[str, Any]:
+            """将可持久化的音视频处理信息附加到情感分析结果。"""
+
+            result["audio_transcript"] = transcript_text or None
+            result["media_analysis"] = media_details
+            if evidence.frame_data_uris and result.get("analysis_mode") == "multimodal":
+                result["analysis_mode"] = "multimodal_video"
+            elif transcript_text and result.get("analysis_mode") == "text":
+                result["analysis_mode"] = "text_audio"
+            return result
+
         if res:
             try:
                 clean_res = res.strip()
@@ -1053,19 +1087,19 @@ class AIService:
                     clean_res = clean_res[start : end + 1]
                 data = json.loads(clean_res)
                 if "score" in data and "label" in data:
-                    return self._normalize_sentiment_result(
+                    return attach_media_details(self._normalize_sentiment_result(
                         data,
                         analysis_mode=analysis_mode,
                         analysis_model=analysis_model,
                         image_count=image_count,
                         follow_keywords=follow_keywords,
-                    )
+                    ))
             except AIConfigurationError:
                 raise
             except Exception as exc:
                 logger.warning(f"⚠️ 多模态情感分析结果解析失败: {exc}")
 
-        return {
+        return attach_media_details({
             "score": 50,
             "label": "中立",
             "category": "其他",
@@ -1076,7 +1110,31 @@ class AIService:
             "analysis_mode": "failed",
             "analysis_model": analysis_model,
             **({"follow_match": True} if follow_keywords else {}),
-        }
+        })
+
+    async def _transcribe_audio(self, payload: AudioPayload) -> str:
+        """将受限下载得到的音频字节发送到硅基流动转写接口。"""
+
+        if not payload.content or not str(settings.SILICONFLOW_API_KEY or "").strip():
+            return ""
+        form = aiohttp.FormData()
+        form.add_field("file", payload.content, filename=payload.filename, content_type=payload.content_type)
+        form.add_field("model", str(getattr(settings, "MEDIA_AUDIO_TRANSCRIPTION_MODEL", "FunAudioLLM/SenseVoiceSmall")))
+        endpoint = f"{str(settings.SILICONFLOW_BASE_URL).rstrip('/')}/audio/transcriptions"
+        timeout = aiohttp.ClientTimeout(total=max(20.0, float(getattr(settings, "MULTIMODAL_SENTIMENT_TIMEOUT_SECONDS", 180.0))))
+        headers = {"Authorization": f"Bearer {settings.SILICONFLOW_API_KEY}"}
+        try:
+            async with self.multimodal_sentiment_sem:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(endpoint, data=form, headers=headers) as response:
+                        if response.status != 200:
+                            logger.warning("音频转写失败：status=%s, body=%s", response.status, (await response.text())[:300])
+                            return ""
+                        data = await response.json(content_type=None)
+                        return str(data.get("text") or "").strip()
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+            logger.warning("音频转写请求失败：%s", exc)
+            return ""
 
     async def batch_analyze_sentiment(
         self,
@@ -1108,7 +1166,9 @@ class AIService:
         text_items: List[Dict[str, Any]] = []
         for item in news_items:
             item_images = normalize_multimodal_image_urls(item.get("images"), max_images=max_images)
-            if item_images:
+            item_videos = item.get("videos") or []
+            item_audios = item.get("audios") or []
+            if item_images or item_videos or item_audios:
                 normalized_item = dict(item)
                 normalized_item["images"] = item_images
                 image_items.append(normalized_item)
@@ -1120,13 +1180,13 @@ class AIService:
         async def analyze_image_item(item: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             """
             输入:
-            - `item`: 带图片的单条新闻数据
+            - `item`: 带图片、视频或音频的单条新闻数据
 
             输出:
             - 新闻 ID 与对应的多模态情感分析结果
 
             作用:
-            - 将含图新闻从批量文本请求中拆出，防止不同新闻的图片与标题错配。
+            - 将含媒体新闻从批量文本请求中拆出，防止不同新闻的媒体与标题错配。
             """
 
             item_id = int(item["id"])
@@ -1135,6 +1195,8 @@ class AIService:
                 str(item.get("title") or "").strip(),
                 content,
                 images=item.get("images"),
+                videos=item.get("videos"),
+                audios=item.get("audios"),
                 follow_keywords=follow_keywords,
             )
             return item_id, result

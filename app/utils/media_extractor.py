@@ -1,6 +1,6 @@
 ﻿"""
-本文件用于从新闻页面 HTML 中提取新闻图片资源链接，
-供抓取流程在保存新闻正文时同步采集封面图与正文配图。
+本文件用于从新闻页面 HTML 中提取图片、视频与音频资源链接，
+供抓取流程在保存新闻正文时同步采集可分析的媒体资源。
 
 主要函数:
 - `is_supported_image_url`: 判断链接是否为可用的图片直链
@@ -70,6 +70,79 @@ _IMAGE_URL_ATTRIBUTES = (
 )
 
 _IMAGE_SRCSET_ATTRIBUTES = ("data-srcset", "data-original-set", "srcset")
+
+_VIDEO_EXT_RE = re.compile(r"\.(?:mp4|webm|mov|m4v)(?:[?#]|$)", re.IGNORECASE)
+_AUDIO_EXT_RE = re.compile(r"\.(?:mp3|wav|m4a|aac|ogg|opus|flac)(?:[?#]|$)", re.IGNORECASE)
+_UNSUPPORTED_STREAM_EXT_RE = re.compile(r"\.(?:m3u8|mpd)(?:[?#]|$)", re.IGNORECASE)
+
+
+def _normalize_media_url(href: str, base_url: str) -> Optional[str]:
+    """将媒体链接转为可下载的绝对 HTTP(S) 地址。"""
+
+    return _normalize_image_url(href, base_url)
+
+
+def _is_supported_av_url(url: Optional[str], *, kind: str, allow_extensionless: bool = False) -> bool:
+    """判断视频或音频链接是否为可安全下载分析的直链。"""
+
+    if not url:
+        return False
+    cleaned = str(url).strip()
+    if not cleaned or _UNSUPPORTED_STREAM_EXT_RE.search(urlparse(cleaned).path):
+        return False
+    matcher = _VIDEO_EXT_RE if kind == "video" else _AUDIO_EXT_RE
+    return allow_extensionless or bool(matcher.search(urlparse(cleaned).path))
+
+
+def _collect_tag_av_urls(tag: Any, base_url: str, *, kind: str) -> List[str]:
+    """从 video/audio 标签及其 source 子标签中收集媒体直链。"""
+
+    urls: List[str] = []
+    for node in [tag, *tag.find_all("source")]:
+        normalized = _normalize_media_url(str(node.get("src") or ""), base_url)
+        media_type = str(node.get("type") or "").lower()
+        if normalized and (
+            _is_supported_av_url(normalized, kind=kind)
+            or media_type.startswith(f"{kind}/")
+        ):
+            urls.append(normalized)
+    return urls
+
+
+def extract_av_urls_from_html(
+    html: str,
+    base_url: Optional[str] = None,
+    *,
+    max_videos: int = 2,
+    max_audios: int = 2,
+) -> Dict[str, List[str]]:
+    """从 HTML 的媒体标签及 Open Graph 元数据中提取视频和音频直链。"""
+
+    if not html:
+        return {"videos": [], "audios": []}
+
+    soup = BeautifulSoup(html, "html.parser")
+    base = base_url or ""
+    videos: List[str] = []
+    audios: List[str] = []
+    for tag in soup.find_all("video"):
+        videos.extend(_collect_tag_av_urls(tag, base, kind="video"))
+    for tag in soup.find_all("audio"):
+        audios.extend(_collect_tag_av_urls(tag, base, kind="audio"))
+    for meta in soup.find_all("meta"):
+        prop = str(meta.get("property") or meta.get("name") or "").lower()
+        value = _normalize_media_url(str(meta.get("content") or ""), base)
+        if not value:
+            continue
+        if prop in {"og:video", "og:video:url", "twitter:player:stream"} and _is_supported_av_url(value, kind="video", allow_extensionless=True):
+            videos.append(value)
+        if prop in {"og:audio", "og:audio:url"} and _is_supported_av_url(value, kind="audio", allow_extensionless=True):
+            audios.append(value)
+
+    def unique(values: List[str], limit: int) -> List[str]:
+        return list(dict.fromkeys(values))[: max(0, int(limit))]
+
+    return {"videos": unique(videos, max_videos), "audios": unique(audios, max_audios)}
 
 
 def is_supported_image_url(url: Optional[str], *, allow_extensionless: bool = False) -> bool:
@@ -281,6 +354,8 @@ def extract_media_from_crawl_result(
     base_url: Optional[str] = None,
     *,
     max_images: int = 12,
+    max_videos: int = 2,
+    max_audios: int = 2,
 ) -> Dict[str, List[str]]:
     """
     输入:
@@ -289,13 +364,15 @@ def extract_media_from_crawl_result(
     - `max_images`: 最多返回的图片数量
 
     输出:
-    - `{"images": [...]}` 多媒体图片列表
+    - `{"images": [...], "videos": [...], "audios": [...]}` 多媒体链接列表
 
     作用:
     - 统一从 crawl4ai 返回结果中提取媒体图片，避免各抓取路径各自实现。
     """
 
     images: List[str] = []
+    videos: List[str] = []
+    audios: List[str] = []
     html = None
     if result is not None:
         if isinstance(result, str):
@@ -305,6 +382,14 @@ def extract_media_from_crawl_result(
 
     if html:
         images = extract_image_urls_from_html(str(html), base_url=base_url, max_images=max_images)
+        av_result = extract_av_urls_from_html(
+            str(html),
+            base_url=base_url,
+            max_videos=max_videos,
+            max_audios=max_audios,
+        )
+        videos = av_result["videos"]
+        audios = av_result["audios"]
     else:
         # 没有 HTML 时，尝试从 markdown 图片语法中提取
         markdown = None
@@ -320,7 +405,7 @@ def extract_media_from_crawl_result(
                     images.append(normalized)
             images = list(dict.fromkeys(images))[:max_images]
 
-    return {"images": images}
+    return {"images": images, "videos": videos, "audios": audios}
 
 
 def pick_cover_image(image_urls: Optional[List[str]]) -> Optional[str]:
