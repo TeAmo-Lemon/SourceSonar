@@ -2,18 +2,21 @@
 本文件用于提供“事件溯源”相关 API：配置状态查询与溯源分析。
 主要函数:
 - `get_trace_status`: 查询 NewsAPI 配置与剩余额度
+- `get_trace_history`: 查询最近溯源记录
+- `get_trace_history_detail`: 读取完整溯源快照
 - `trace_analyze`: 对事件/主题执行全球新闻雷达与传播轨迹分析
 """
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.services.newsapi_service import DAILY_REQUEST_BUDGET, NewsApiBudgetError, NewsApiError, newsapi_client
+from app.services.trace_history_service import trace_history_service
 from app.services.trace_service import trace_service
 
 router = APIRouter(prefix="/api/trace", tags=["trace"])
@@ -44,7 +47,7 @@ class TraceAnalyzeRequest(BaseModel):
 
 
 @router.get("/status")
-async def get_trace_status():
+async def get_trace_status() -> Dict[str, Any]:
     """
     输入:
     - 无
@@ -66,8 +69,55 @@ async def get_trace_status():
     }
 
 
+@router.get("/history")
+async def get_trace_history(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    输入:
+    - `limit`: 最近记录数量上限
+    - `db`: 数据库会话
+
+    输出:
+    - 最近溯源记录摘要列表
+
+    作用:
+    - 页面刷新或切换事件时展示可恢复的历史分析记录。
+    """
+
+    records = await trace_history_service.list_records(db, limit=limit)
+    return {"data": [trace_history_service.serialize_summary(record) for record in records]}
+
+
+@router.get("/history/{record_id}")
+async def get_trace_history_detail(
+    record_id: int = Path(..., ge=1),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    输入:
+    - `record_id`: 溯源记录 ID
+    - `db`: 数据库会话
+
+    输出:
+    - 指定记录的完整溯源分析快照
+
+    作用:
+    - 恢复指标、图表、里程碑和文章列表，不重新请求 NewsAPI。
+    """
+
+    record = await trace_history_service.get_record(db, record_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="溯源记录不存在")
+    return trace_history_service.serialize_result(record)
+
+
 @router.post("/analyze")
-async def trace_analyze(payload: TraceAnalyzeRequest, db: AsyncSession = Depends(get_db)):
+async def trace_analyze(
+    payload: TraceAnalyzeRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """
     输入:
     - `payload`: 溯源分析请求体（事件文本或热点新闻 ID）
@@ -112,4 +162,13 @@ async def trace_analyze(payload: TraceAnalyzeRequest, db: AsyncSession = Depends
         status_code = 429 if result["meta"].get("error_kind") == "budget" else 502
         raise HTTPException(status_code=status_code, detail=error)
 
-    return result
+    record = await trace_history_service.save_result(
+        db,
+        event=event_text,
+        news_id=payload.news_id,
+        language=language,
+        days=payload.days,
+        result=result,
+    )
+    await db.commit()
+    return trace_history_service.serialize_result(record)

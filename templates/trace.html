@@ -2,7 +2,7 @@
 {% extends "base.html" %}
 {% block title %}事件溯源 - {{ settings.APP_NAME }}{% endblock %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/pages/trace.css?version=v0.2.0">
+    <link rel="stylesheet" href="/static/css/pages/trace.css?version=v0.2.1">
     <script src="/static/echarts.min.js"></script>
 {% endblock %}
 {% block content %}
@@ -47,6 +47,13 @@
                     <div class="trace-hot-title">从首页热点新闻中选择</div>
                     <div id="traceHotList" class="trace-hot-list">
                         <span class="trace-loading">热点加载中...</span>
+                    </div>
+                </div>
+
+                <div class="trace-hot-section trace-history-section">
+                    <div class="trace-hot-title">最近溯源记录</div>
+                    <div id="traceHistoryList" class="trace-history-list">
+                        <span class="trace-loading">记录加载中...</span>
                     </div>
                 </div>
             </div>
@@ -119,5 +126,5 @@
 
 {% endblock %}
 {% block scripts %}
-    <script src="/static/js/pages/trace.js?version=v0.2.0"></script>
+    <script src="/static/js/pages/trace.js?version=v0.2.1"></script>
 {% endblock %}

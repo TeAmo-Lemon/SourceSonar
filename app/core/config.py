@@ -77,6 +77,19 @@ class Settings(BaseSettings):
     SILICONFLOW_API_KEY: Optional[str] = None
     SILICONFLOW_BASE_URL: Optional[str] = None
     EMBEDDING_MODEL: Optional[str] = None
+    EMBEDDING_INPUT_MAX_CHARS: int = 2000
+    EMBEDDING_BATCH_SIZE: int = 10
+
+    # 多模态情感分析通过硅基流动独立调用，避免受主备文本模型路由影响
+    MULTIMODAL_SENTIMENT_ENABLED: bool = True
+    MULTIMODAL_SENTIMENT_MODEL: str = "Qwen/Qwen3-VL-30B-A3B-Thinking"
+    MULTIMODAL_SENTIMENT_MAX_IMAGES: int = 3
+    MULTIMODAL_SENTIMENT_IMAGE_DETAIL: str = "auto"
+    MULTIMODAL_SENTIMENT_CONCURRENCY: int = 2
+    MULTIMODAL_SENTIMENT_TIMEOUT_SECONDS: float = 180.0
+    MULTIMODAL_SENTIMENT_MAX_TOKENS: int = 4096
+    MULTIMODAL_SENTIMENT_IMAGE_TIMEOUT_SECONDS: float = 12.0
+    MULTIMODAL_SENTIMENT_MAX_IMAGE_BYTES: int = 5 * 1024 * 1024
 
     MAIN_AI_API_KEY: Optional[str] = None
     MAIN_AI_BASE_URL: Optional[str] = None

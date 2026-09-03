@@ -12,7 +12,7 @@ import json
 import os
 from datetime import datetime, time, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from sqlalchemy import delete, desc, or_, select
@@ -42,7 +42,13 @@ DATA_DIR = Path("data")
 STATE_FILE = DATA_DIR / "scheduler_state.json"
 
 
-async def _analyze_single_news(news_item, sem: asyncio.Semaphore, *, use_summary_fallback: bool = True, label: str = "") -> Optional[dict]:
+async def _analyze_single_news(
+    news_item: News,
+    sem: asyncio.Semaphore,
+    *,
+    use_summary_fallback: bool = True,
+    label: str = "",
+) -> Optional[dict]:
     """
     输入:
     - `news_item`: News 对象
@@ -65,7 +71,11 @@ async def _analyze_single_news(news_item, sem: asyncio.Semaphore, *, use_summary
                 text = (news_item.summary or "").strip() or (news_item.title or "").strip()
             else:
                 text = news_item.summary or news_item.content or ""
-            return await ai_service.analyze_sentiment(news_item.title, text)
+            return await ai_service.analyze_sentiment(
+                news_item.title,
+                text,
+                images=news_item.images or [],
+            )
         except AIServiceUnavailableError:
             raise
         except Exception as e:
@@ -73,7 +83,7 @@ async def _analyze_single_news(news_item, sem: asyncio.Semaphore, *, use_summary
             return None
 
 
-def _apply_analysis_result(news_item, res: dict) -> None:
+def _apply_analysis_result(news_item: News, res: Dict[str, Any]) -> None:
     """
     输入:
     - `news_item`: 新闻对象
@@ -89,8 +99,12 @@ def _apply_analysis_result(news_item, res: dict) -> None:
     news_item.sentiment_score = res["score"]
     news_item.sentiment_label = res["label"]
     news_item.category = res.get("category", "其他")
-    news_item.keywords = res["keywords"]
-    news_item.entities = res["entities"]
+    news_item.region = normalize_regions_to_countries(res.get("region", "全球"))
+    news_item.keywords = res.get("keywords", [])
+    news_item.entities = res.get("entities", [])
+    news_item.visual_analysis = res.get("visual_analysis", {})
+    news_item.analysis_mode = res.get("analysis_mode", "text")
+    news_item.analysis_model = res.get("analysis_model")
 
 
 def _body_fetch_concurrency(total_task: int, hard_cap: int = 2) -> int:
@@ -228,6 +242,7 @@ async def _process_summary_news_item(news_id: int, index: int, total: int) -> bo
                 embs = await ai_service.get_embeddings([txt_to_embed])
                 if embs and embs[0]:
                     news.embedding = embs[0]
+                    news.embedding_model = settings.EMBEDDING_MODEL
             except AIServiceUnavailableError:
                 raise
             except Exception as e:
@@ -236,14 +251,13 @@ async def _process_summary_news_item(news_id: int, index: int, total: int) -> bo
             if not news.keywords:
                 try:
                     logger.debug(f"   {progress_str} 🧠 同步深度分析: {news.title}")
-                    res = await ai_service.analyze_sentiment(news.title, summary)
+                    res = await ai_service.analyze_sentiment(
+                        news.title,
+                        summary,
+                        images=news.images or [],
+                    )
                     if res:
-                        news.sentiment_score = res["score"]
-                        news.sentiment_label = res["label"]
-                        news.category = res.get("category", "其他")
-                        news.region = res.get("region", "其他")
-                        news.keywords = res.get("keywords", [])
-                        news.entities = res.get("entities", [])
+                        _apply_analysis_result(news, res)
                 except AIServiceUnavailableError:
                     raise
                 except Exception as e:
@@ -393,7 +407,15 @@ async def auto_batch_analyze_new_news() -> None:
 
         for i in range(0, total, batch_size):
             batch = news_list[i : i + batch_size]
-            batch_data = [{"id": n.id, "title": n.title} for n in batch]
+            batch_data = [
+                {
+                    "id": n.id,
+                    "title": n.title,
+                    "summary": n.summary or "",
+                    "images": n.images or [],
+                }
+                for n in batch
+            ]
 
             current_end = min(i + batch_size, total)
             logger.info(f"   🚀 正在分析: {i + 1}-{current_end}/{total} (本批: {len(batch)})...")
@@ -406,7 +428,14 @@ async def auto_batch_analyze_new_news() -> None:
                     news.sentiment_label = res.get("label", "中立")
                     news.sentiment_score = res.get("score", 50)
                     news.category = res.get("category", "其他")
-                    news.region = normalize_regions_to_countries(res.get("region", "其他"))
+                    news.region = normalize_regions_to_countries(res.get("region", "全球"))
+                    if res.get("keywords"):
+                        news.keywords = res["keywords"]
+                    if res.get("entities"):
+                        news.entities = res["entities"]
+                    news.visual_analysis = res.get("visual_analysis", {})
+                    news.analysis_mode = res.get("analysis_mode", "text")
+                    news.analysis_model = res.get("analysis_model")
                     updates += 1
 
             await db.commit()
@@ -616,11 +645,7 @@ async def auto_analyze_sentiment_top_n() -> None:
 
             for news, res in zip(batch, results):
                 if res:
-                    news.sentiment_score = res["score"]
-                    news.sentiment_label = res["label"]
-                    news.category = res.get("category", "其他")
-                    news.keywords = res.get("keywords", [])
-                    news.entities = res.get("entities", [])
+                    _apply_analysis_result(news, res)
                     db.add(news)
                     count += 1
 
@@ -826,6 +851,9 @@ async def run_pipeline_task(generate_daily: bool = True, run_topic_task: bool = 
             if news_items:
                 await cleanup_blocked_news()
 
+            # 分析前先为缺图新闻补抓图片，确保本轮 Qwen3-VL 能收到完整的图文输入
+            await auto_fill_news_images()
+
             await cluster_service.execute_clustering()
 
             await auto_batch_analyze_new_news()
@@ -834,9 +862,6 @@ async def run_pipeline_task(generate_daily: bool = True, run_topic_task: bool = 
             await auto_generate_summaries_categories_top_n()
 
             await auto_analyze_sentiment_top_n()
-
-            # 为入库但缺少配图的新闻补抓图片
-            await auto_fill_news_images()
 
             if generate_daily:
                 await report_service.generate_and_cache_global_report("daily")
@@ -1008,6 +1033,8 @@ async def run_manual() -> None:
         with ai_service.task_retry_scope("手动全流程任务"):
             items = await crawler_service.fetch_all_sources()
             await crawler_service.save_raw_news(items)
+            # 手动流程同样先补图，再执行多模态情感分析
+            await auto_fill_news_images()
             await cluster_service.execute_clustering()
             await auto_generate_summaries_top_n()
             await auto_generate_summaries_categories_top_n()
@@ -1147,11 +1174,7 @@ async def background_analyze_all() -> None:
 
             for news, res in zip(items, results):
                 if res:
-                    news.sentiment_score = res["score"]
-                    news.sentiment_label = res["label"]
-                    news.category = res.get("category", "其他")
-                    news.keywords = res["keywords"]
-                    news.entities = res["entities"]
+                    _apply_analysis_result(news, res)
                     db.add(news)
                     processed_in_batch += 1
                 else:

@@ -411,6 +411,7 @@ class TopicService:
             updated_time=datetime.now(),
             heat_score=0,
             embedding=t_vec,
+            embedding_model=settings.EMBEDDING_MODEL if t_vec else None,
             status="active"
         )
         db.add(new_topic)
@@ -445,6 +446,7 @@ class TopicService:
         t_embs = await self.ai.get_embeddings([new_name])
         t_vec = t_embs[0] if t_embs and t_embs[0] else []
         topic.embedding = t_vec
+        topic.embedding_model = settings.EMBEDDING_MODEL if t_vec else None
         
         db.add(topic)
         await db.flush()
@@ -522,9 +524,15 @@ class TopicService:
         pool_vecs = await self._ensure_news_embeddings_batch(db, news_pool)
         
         # 确保专题有向量
+        if not target_topic.embedding or target_topic.embedding_model != settings.EMBEDDING_MODEL:
+            refreshed = await self.ai.get_embeddings([f"{target_topic.name} {target_topic.summary or ''}"])
+            target_topic.embedding = refreshed[0] if refreshed and refreshed[0] else []
+            target_topic.embedding_model = settings.EMBEDDING_MODEL if target_topic.embedding else None
+            db.add(target_topic)
+            await db.flush()
         if not target_topic.embedding:
-             logger.warning("专题无向量，跳过扫描")
-             return
+            logger.warning("专题无向量，跳过扫描")
+            return
 
         # 执行匹配
         logger.info(f"🔍 [Scan] 正在为专题 '{target_topic.name}' 扫描相关新闻 (Pool: {len(news_pool)})...")
@@ -850,6 +858,7 @@ class TopicService:
                 updated_time=refresh_time,
                 heat_score=max_heat,
                 embedding=t_vec,
+                embedding_model=settings.EMBEDDING_MODEL if t_vec else None,
                 status="active"
             )
             db.add(new_topic)
@@ -1119,7 +1128,7 @@ class TopicService:
         texts = []
         
         for idx, n in enumerate(news_list):
-            if n.embedding and len(n.embedding) > 0:
+            if n.embedding and len(n.embedding) > 0 and n.embedding_model == settings.EMBEDDING_MODEL:
                 out[n.id] = list(n.embedding)
             else:
                 txt = " ".join([n.title or "", n.summary or "", (n.content or "")[:500]]).strip()
@@ -1139,6 +1148,7 @@ class TopicService:
                         n = news_list[original_idx]
                         if emb:
                             n.embedding = emb
+                            n.embedding_model = settings.EMBEDDING_MODEL
                             db.add(n)
                             out[n.id] = emb
                 except Exception as e:
@@ -1151,7 +1161,7 @@ class TopicService:
         out = []
         to_embed = []
         for idx, t in enumerate(topics):
-            if t.embedding and len(t.embedding) > 0:
+            if t.embedding and len(t.embedding) > 0 and t.embedding_model == settings.EMBEDDING_MODEL:
                 out.append((t, list(t.embedding)))
             else:
                 txt = f"{t.name} {t.summary}"
@@ -1166,6 +1176,7 @@ class TopicService:
                     if vec:
                         t = topics[idx]
                         t.embedding = vec
+                        t.embedding_model = settings.EMBEDDING_MODEL
                         db.add(t)
                         out[idx] = (t, vec) # 更新输出列表中的元组
             except Exception as e:

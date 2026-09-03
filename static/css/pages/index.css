@@ -1219,3 +1219,21 @@ body.page-index .summary-box { margin-top: 2px; font-size: 0.9rem; line-height: 
     .news-image-detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .news-image-detail-item { height: 110px; }
 }
+
+/* 多模态视觉分析结果卡片 */
+.multimodal-analysis-card {
+    border-color: color-mix(in srgb, var(--primary-color) 28%, var(--border-color));
+    background: color-mix(in srgb, var(--primary-light) 42%, var(--bg-card));
+}
+.multimodal-badge {
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    font-size: 0.72rem;
+    font-weight: 750;
+}
+.multimodal-summary { color: var(--text-main); line-height: 1.7; }
+.multimodal-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; color: var(--text-secondary); font-size: 0.78rem; }
+.multimodal-evidence { margin-top: 9px; color: var(--text-secondary); font-size: 0.84rem; line-height: 1.65; }
+.multimodal-evidence strong { margin-right: 8px; color: var(--text-main); }

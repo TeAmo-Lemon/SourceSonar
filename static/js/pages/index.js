@@ -878,6 +878,28 @@
             `).join('');
         }
 
+        // 渲染模型从图片中提取的情绪依据与图文核验结果。
+        function renderVisualAnalysis(news) {
+            const visual = news && news.visual_analysis;
+            if (!visual || typeof visual !== 'object' || Number(visual.image_count || 0) <= 0) return '';
+            const cues = Array.isArray(visual.sentiment_cues) ? visual.sentiment_cues.filter(Boolean) : [];
+            const ocr = Array.isArray(visual.ocr_text) ? visual.ocr_text.filter(Boolean) : [];
+            const consistency = visual.text_image_consistency || '无法判断';
+            const model = news.analysis_model || 'Qwen3-VL';
+            return `
+                <div class="detail-section multimodal-analysis-card">
+                    <div class="detail-section-title">
+                        <span>多模态视觉分析</span>
+                        <span class="multimodal-badge">图文联合 · ${Number(visual.image_count || 0)} 张</span>
+                    </div>
+                    ${visual.summary ? `<div class="multimodal-summary">${escapeHtml(visual.summary)}</div>` : ''}
+                    <div class="multimodal-meta"><span>图文关系：${escapeHtml(consistency)}</span><span>模型：${escapeHtml(model)}</span></div>
+                    ${cues.length ? `<div class="multimodal-evidence"><strong>视觉情绪线索</strong>${escapeHtml(cues.join(' · '))}</div>` : ''}
+                    ${ocr.length ? `<div class="multimodal-evidence"><strong>图片文字</strong>${escapeHtml(ocr.join(' · '))}</div>` : ''}
+                </div>
+            `;
+        }
+
         function renderNewsDetail(data) {
             const news = data.news || {};
             const status = data.content_status || {};
@@ -916,6 +938,7 @@
                     <button class="btn-link" type="button" data-action="trace-event" data-news-id="${news.id}" data-title="${attrEscape(news.title)}">溯源分析</button>
                 </div>
                 ${renderNewsImages(news.images, true)}
+                ${renderVisualAnalysis(news)}
                 <div class="detail-status-grid">
                     <div><strong>${status.has_summary ? '已有摘要' : '暂无摘要'}</strong><span>新闻摘要</span></div>
                     <div><strong>${status.related_source_count || 0}</strong><span>关联报道</span></div>

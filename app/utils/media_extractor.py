@@ -24,7 +24,7 @@ _IMAGE_EXT_RE = re.compile(
 
 # 即使图片地址来自图片标签，也不应把明显的网页或脚本地址当作图片入库
 _NON_IMAGE_FILE_EXT_RE = re.compile(
-    r"\.(?:html?|php|aspx?|jsp|js|css)$",
+    r"\.(?:html?|php|aspx?|jsp|js|css|m3u8|mp4|webm|mov|avi)$",
     re.IGNORECASE,
 )
 
@@ -43,10 +43,12 @@ _IMAGE_PLACEHOLDER_HINTS = (
 # WhatsApp 等社交平台常见的图片前端资源前缀（多用于压缩图而非正文图）
 _EXTERNAL_IMAGE_PREFIXES = (
     "https://external-content.duckduckgo.com",
+    "https://styles.redditmedia.com",
+    "https://v.redd.it",
 )
 
 # 常见图床广告位 CDN 片段，命中则过滤
-_IMAGE_AD_HINTS = ("advert", "advertise", "banner-", "logo.", "avatar")
+_IMAGE_AD_HINTS = ("advert", "advertise", "banner-", "logo.", "avatar", "communityicon", "profileicon")
 
 # 常见的正文图片选择器，用于让正文配图优先于页面导航、作者头像等资源入库
 _ARTICLE_IMAGE_SELECTORS = (

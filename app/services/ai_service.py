@@ -12,7 +12,7 @@ import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
 from time import monotonic
-from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import aiohttp
 from openai import AsyncOpenAI, APIStatusError, RateLimitError, APIConnectionError
@@ -22,6 +22,11 @@ from app.core.logger import setup_logger
 from app.core.exceptions import AIConfigurationError, AIServiceUnavailableError
 from app.core.prompts import prompt_manager
 from app.services.concurrency_service import concurrency_service
+from app.utils.multimodal_message import (
+    build_multimodal_chat_messages,
+    normalize_multimodal_image_urls,
+    prepare_multimodal_image_inputs,
+)
 from app.utils.title_tools import normalize_refined_title, should_refine_title
 from app.utils.tools import normalize_regions_to_countries
 
@@ -58,6 +63,9 @@ class AIService:
 
         self.main_sem = asyncio.Semaphore(settings.MAIN_AI_CONCURRENCY)
         self.backup_sem = asyncio.Semaphore(settings.BACKUP_AI_CONCURRENCY)
+        self.multimodal_sentiment_sem = asyncio.Semaphore(
+            max(1, int(getattr(settings, "MULTIMODAL_SENTIMENT_CONCURRENCY", 2) or 2))
+        )
         self._last_embedding_error_signature = ""
         self._last_embedding_error_at = 0.0
         self._suppressed_embedding_errors = 0
@@ -137,6 +145,9 @@ class AIService:
         # 重新初始化信号量（并发配置可能改变）
         self.main_sem = asyncio.Semaphore(settings.MAIN_AI_CONCURRENCY)
         self.backup_sem = asyncio.Semaphore(settings.BACKUP_AI_CONCURRENCY)
+        self.multimodal_sentiment_sem = asyncio.Semaphore(
+            max(1, int(getattr(settings, "MULTIMODAL_SENTIMENT_CONCURRENCY", 2) or 2))
+        )
         logger.info("🔄 AIService 配置已刷新")
 
     def _has_main_llm(self) -> bool:
@@ -147,6 +158,26 @@ class AIService:
 
     def _has_embedding(self) -> bool:
         return bool((settings.SILICONFLOW_API_KEY or "").strip()) and bool((settings.SILICONFLOW_BASE_URL or "").strip()) and bool((settings.EMBEDDING_MODEL or "").strip())
+
+    def _has_multimodal_sentiment(self) -> bool:
+        """
+        输入:
+        - 当前运行配置
+
+        输出:
+        - 硅基流动多模态情感分析配置是否完整
+
+        作用:
+        - 在调用视觉模型前统一校验开关、API 地址、密钥和模型名称。
+        """
+
+        return bool(getattr(settings, "MULTIMODAL_SENTIMENT_ENABLED", True)) and all(
+            (
+                str(settings.SILICONFLOW_API_KEY or "").strip(),
+                str(settings.SILICONFLOW_BASE_URL or "").strip(),
+                str(getattr(settings, "MULTIMODAL_SENTIMENT_MODEL", "") or "").strip(),
+            )
+        )
 
     def _ai_default_headers(self) -> Optional[Dict[str, str]]:
         user_agent = str(settings.AI_USER_AGENT or "").strip()
@@ -216,6 +247,10 @@ class AIService:
         system: str = "",
         semaphore: asyncio.Semaphore | None = None,
         failure_state: Optional[Dict[str, str]] = None,
+        messages: Optional[List[Dict[str, Any]]] = None,
+        temperature: float = 0.6,
+        timeout_seconds: float = 120.0,
+        max_tokens: Optional[int] = None,
     ) -> Optional[str]:
         """
         输入:
@@ -225,6 +260,10 @@ class AIService:
         - `system`: 系统提示词
         - `semaphore`: 并发控制（可选）
         - `failure_state`: 可选失败状态容器
+        - `messages`: 预构造消息；用于多模态内容块
+        - `temperature`: 采样温度
+        - `timeout_seconds`: 请求超时秒数
+        - `max_tokens`: 最大输出 Token 数
 
         输出:
         - 模型返回文本；失败返回 None
@@ -248,16 +287,20 @@ class AIService:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(f"🔵 [LLM 请求] 模型: {model}\n系统提示词: {system}\n用户提示词: {prompt[:2000]}...")
 
-            messages = self._build_chat_messages(prompt, system)
+            request_messages = messages or self._build_chat_messages(prompt, system)
 
             async def do_call():
-                return await client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=0.6,
-                    timeout=120,
-                    extra_body=extra_body if extra_body else None,
-                )
+                request_kwargs: Dict[str, Any] = {
+                    "model": model,
+                    "messages": request_messages,
+                    "temperature": temperature,
+                    "timeout": timeout_seconds,
+                }
+                if extra_body:
+                    request_kwargs["extra_body"] = extra_body
+                if max_tokens is not None and max_tokens > 0:
+                    request_kwargs["max_tokens"] = max_tokens
+                return await client.chat.completions.create(**request_kwargs)
 
             try:
                 if semaphore:
@@ -288,10 +331,13 @@ class AIService:
                     logger.error(f"❌ AI 认证失败 (401) - API Key 无效 ({model}): {e}")
                     raise AIConfigurationError(f"AI API Key 无效 ({model})")
 
-                # 400 Bad Request 通常意味着内容过滤或参数无效，不按服务不可用处理。
+                # 400 表示请求参数或上游资源无效，不按服务不可用处理。
                 if e.status_code == 400:
                     self._mark_llm_failure(failure_state, "rejected", str(e))
-                    logger.warning(f"❌ AI 请求被拒绝 (400) - 可能触发敏感词过滤 ({model}): {e}")
+                    if "20040" in str(e) or "image URL" in str(e):
+                        logger.warning(f"❌ AI 图片输入无效或不可下载 (400) ({model}): {e}")
+                    else:
+                        logger.warning(f"❌ AI 请求参数被拒绝 (400) ({model}): {e}")
                     return None
 
                 if e.status_code >= 500:
@@ -728,62 +774,315 @@ class AIService:
             "- 输出 JSON 必须额外包含布尔字段 follow_match。"
         )
 
-    async def analyze_sentiment(self, title: str, content: str = "") -> Dict:
+    def _append_multimodal_sentiment_instruction(self, system_prompt: str) -> str:
+        """
+        输入:
+        - `system_prompt`: 当前单条情感分析系统提示词
+
+        输出:
+        - 强制包含视觉分析字段的系统提示词
+
+        作用:
+        - 即使用户在管理后台保存了旧版自定义提示词，也能要求视觉模型返回稳定的多模态分析结构。
+        """
+
+        return (
+            f"{system_prompt}\n\n"
+            "多模态输出要求：如请求附有新闻图片，必须联合分析图片中的场景、人物可见情绪、"
+            "事件相关文字与图文一致性；不得根据面孔猜测身份，不得把装饰图当作事件事实。"
+            "输出 JSON 必须包含 visual_analysis 对象，其字段为 summary、sentiment_cues、ocr_text、"
+            "text_image_consistency；最后一项只能是“一致”“互补”“冲突”“无法判断”。"
+        )
+
+    def _multimodal_sentiment_model_name(self) -> str:
+        """
+        输入:
+        - 当前运行配置
+
+        输出:
+        - 多模态情感分析模型名称
+
+        作用:
+        - 集中读取模型标识，保证日志、调用与入库记录使用同一名称。
+        """
+
+        return str(
+            getattr(
+                settings,
+                "MULTIMODAL_SENTIMENT_MODEL",
+                "Qwen/Qwen3-VL-30B-A3B-Thinking",
+            )
+            or "Qwen/Qwen3-VL-30B-A3B-Thinking"
+        ).strip()
+
+    def _normalize_visual_analysis(self, value: Any, *, image_count: int) -> Dict[str, Any]:
+        """
+        输入:
+        - `value`: 模型返回的视觉分析对象
+        - `image_count`: 实际送入模型并成功分析的图片数量
+
+        输出:
+        - 字段稳定的视觉分析字典
+
+        作用:
+        - 规范视觉摘要、情绪线索、OCR 文本和图文一致性，避免模型输出差异污染接口数据。
+        """
+
+        raw = value if isinstance(value, dict) else {}
+        consistency = str(raw.get("text_image_consistency") or "无法判断").strip()
+        if consistency not in {"一致", "互补", "冲突", "无法判断"}:
+            consistency = "无法判断"
+
+        sentiment_cues = raw.get("sentiment_cues")
+        ocr_text = raw.get("ocr_text")
+        return {
+            "summary": str(raw.get("summary") or "").strip() if image_count > 0 else "",
+            "sentiment_cues": [str(item).strip() for item in sentiment_cues if str(item).strip()][:8]
+            if image_count > 0 and isinstance(sentiment_cues, list)
+            else [],
+            "ocr_text": [str(item).strip() for item in ocr_text if str(item).strip()][:8]
+            if image_count > 0 and isinstance(ocr_text, list)
+            else [],
+            "text_image_consistency": consistency if image_count > 0 else "无法判断",
+            "image_count": max(0, int(image_count)),
+        }
+
+    def _normalize_sentiment_result(
+        self,
+        value: Any,
+        *,
+        analysis_mode: str,
+        analysis_model: str,
+        image_count: int,
+        follow_keywords: str = "",
+    ) -> Dict[str, Any]:
+        """
+        输入:
+        - `value`: 模型解析后的 JSON 对象
+        - `analysis_mode`: 本次成功使用的分析模式
+        - `analysis_model`: 本次调用的模型名称
+        - `image_count`: 成功送入模型的图片数量
+        - `follow_keywords`: 可选关注关键词
+
+        输出:
+        - 可直接写回新闻模型的标准情感分析结果
+
+        作用:
+        - 统一校验情感分数、标签、分类、地区、关键词、实体与视觉分析字段。
+        """
+
+        data = dict(value) if isinstance(value, dict) else {}
+        try:
+            score = int(round(float(data.get("score", 50))))
+        except (TypeError, ValueError):
+            score = 50
+        score = max(0, min(100, score))
+
+        label = str(data.get("label") or "").strip()
+        if label not in {"正面", "中立", "负面"}:
+            label = "负面" if score <= 39 else "正面" if score >= 61 else "中立"
+
+        keywords = data.get("keywords")
+        entities = data.get("entities")
+        result: Dict[str, Any] = {
+            "score": score,
+            "label": label,
+            "category": self._normalize_category(data.get("category", "")),
+            "region": normalize_regions_to_countries(data.get("region")) or "全球",
+            "keywords": [str(item).strip() for item in keywords if str(item).strip()][:8]
+            if isinstance(keywords, list)
+            else [],
+            "entities": [str(item).strip() for item in entities if str(item).strip()][:8]
+            if isinstance(entities, list)
+            else [],
+            "visual_analysis": self._normalize_visual_analysis(
+                data.get("visual_analysis"),
+                image_count=image_count,
+            ),
+            "analysis_mode": analysis_mode,
+            "analysis_model": analysis_model,
+        }
+        if not result["region"] or result["region"] in {"其他", "未知"}:
+            result["region"] = "全球"
+        if follow_keywords:
+            result["follow_match"] = self._parse_bool_value(data.get("follow_match"), default=True)
+        return result
+
+    async def _call_sentiment_model(
+        self,
+        user_prompt: str,
+        system_prompt: str,
+        *,
+        image_urls: Optional[Sequence[Any]] = None,
+    ) -> Tuple[Optional[str], str, str, int]:
+        """
+        输入:
+        - `user_prompt`: 情感分析用户提示词
+        - `system_prompt`: 情感分析系统提示词
+        - `image_urls`: 新闻图片地址序列
+
+        输出:
+        - `(模型文本, 分析模式, 模型名称, 成功使用的图片数量)`
+
+        作用:
+        - 优先通过硅基流动 Qwen3-VL 完成图文联合分析；图片请求失败时使用同一模型纯文本降级。
+        """
+
+        if not bool(getattr(settings, "MULTIMODAL_SENTIMENT_ENABLED", True)):
+            result = await self._call_llm_with_routes(
+                user_prompt,
+                system_prompt,
+                prefer_backup=self._get_prefer_backup("SENTIMENT"),
+            )
+            return result, "text", "configured-route", 0
+
+        if not self._has_multimodal_sentiment():
+            raise AIConfigurationError(
+                "多模态情感分析已启用，但 SILICONFLOW_API_KEY、SILICONFLOW_BASE_URL 或 MULTIMODAL_SENTIMENT_MODEL 未配置完整"
+            )
+
+        model = self._multimodal_sentiment_model_name()
+        max_images = max(0, int(getattr(settings, "MULTIMODAL_SENTIMENT_MAX_IMAGES", 3) or 0))
+        normalized_images = normalize_multimodal_image_urls(image_urls, max_images=max_images)
+        timeout_seconds = max(
+            10.0,
+            float(getattr(settings, "MULTIMODAL_SENTIMENT_TIMEOUT_SECONDS", 180.0) or 180.0),
+        )
+        max_tokens = max(256, int(getattr(settings, "MULTIMODAL_SENTIMENT_MAX_TOKENS", 4096) or 4096))
+
+        prepared_images = await prepare_multimodal_image_inputs(
+            image_urls,
+            max_images=max_images,
+            max_bytes=max(1024, int(getattr(settings, "MULTIMODAL_SENTIMENT_MAX_IMAGE_BYTES", 5 * 1024 * 1024))),
+            timeout_seconds=max(1.0, float(getattr(settings, "MULTIMODAL_SENTIMENT_IMAGE_TIMEOUT_SECONDS", 12.0))),
+            headers=self._ai_default_headers(),
+            proxy=str(settings.CRAWLER_PROXY or "").strip() or None,
+        )
+        if normalized_images and not prepared_images:
+            logger.info("ℹ️ 新闻图片未通过下载或 MIME 校验，本次仅执行文本情感分析")
+
+        async def call_once(images: Sequence[str]) -> Optional[str]:
+            """
+            输入:
+            - `images`: 本次请求发送的图片地址
+
+            输出:
+            - 模型最终回答文本；失败返回 None
+
+            作用:
+            - 构造一次硅基流动多模态请求，并复用 AIService 的异常分类与并发控制。
+            """
+
+            messages = build_multimodal_chat_messages(
+                user_prompt,
+                system_prompt,
+                image_urls=images,
+                max_images=max_images,
+                image_detail=str(getattr(settings, "MULTIMODAL_SENTIMENT_IMAGE_DETAIL", "auto") or "auto"),
+            )
+            failure_state: Dict[str, str] = {}
+            async with AsyncOpenAI(
+                api_key=str(settings.SILICONFLOW_API_KEY),
+                base_url=str(settings.SILICONFLOW_BASE_URL),
+                default_headers=self._ai_default_headers(),
+            ) as client:
+                return await self._call_llm(
+                    client,
+                    model,
+                    user_prompt,
+                    system_prompt,
+                    semaphore=self.multimodal_sentiment_sem,
+                    failure_state=failure_state,
+                    messages=messages,
+                    temperature=0.2,
+                    timeout_seconds=timeout_seconds,
+                    max_tokens=max_tokens,
+                )
+
+        result = await call_once(prepared_images)
+        if result:
+            mode = "multimodal" if prepared_images else "text"
+            return result, mode, model, len(prepared_images)
+
+        if prepared_images:
+            logger.warning("⚠️ 多模态图片请求失败，使用同一 Qwen3-VL 模型降级为纯文本情感分析")
+            result = await call_once([])
+            if result:
+                return result, "text_fallback", model, 0
+
+        return None, "failed", model, 0
+
+    async def analyze_sentiment(
+        self,
+        title: str,
+        content: str = "",
+        images: Optional[Sequence[Any]] = None,
+        follow_keywords: str = "",
+    ) -> Dict[str, Any]:
         """
         输入:
         - `title`: 新闻标题
         - `content`: 新闻摘要或正文（可选）
+        - `images`: 新闻封面图与正文配图地址（可选）
+        - `follow_keywords`: 关注关键词；不为空时额外返回 follow_match
 
         输出:
         - 情感分析结果（score/label/category/region/keywords/entities）
 
         作用:
-        - 对单条新闻进行深度舆情分析，主通道失败时降级到备用通道
+        - 使用硅基流动 Qwen3-VL 综合分析新闻文本与图片，并保存视觉分析依据
         """
 
         categories_str = self._format_category_options()
         system_prompt = prompt_manager.get_system_prompt("sentiment_analysis_single", categories_str=categories_str)
+        system_prompt = self._append_multimodal_sentiment_instruction(system_prompt)
+        system_prompt = self._append_follow_keywords_instruction(system_prompt, follow_keywords)
         user_prompt = prompt_manager.get_user_prompt("sentiment_analysis_single", title=title, content=content[:1000])
 
-        prefer_backup = self._get_prefer_backup("SENTIMENT")
-        res = await self._call_llm_with_routes(user_prompt, system_prompt, prefer_backup=prefer_backup)
+        res, analysis_mode, analysis_model, image_count = await self._call_sentiment_model(
+            user_prompt,
+            system_prompt,
+            image_urls=images,
+        )
         if res:
             try:
                 clean_res = res.strip()
-                if "```" in clean_res:
-                    start = clean_res.find("{")
-                    end = clean_res.rfind("}")
-                    if start != -1 and end != -1:
-                        clean_res = clean_res[start : end + 1]
+                start = clean_res.find("{")
+                end = clean_res.rfind("}")
+                if start != -1 and end != -1:
+                    clean_res = clean_res[start : end + 1]
                 data = json.loads(clean_res)
                 if "score" in data and "label" in data:
-                    data["category"] = self._normalize_category(data.get("category", ""))
-                    data["region"] = normalize_regions_to_countries(data.get("region"))
-                    if not data.get("region") or data.get("region") in ["其他", "未知"]:
-                        data["region"] = "全球"
-
-                    # 补全可能缺失的字段，防止 KeyError
-                    if "keywords" not in data:
-                        data["keywords"] = []
-                    if "entities" not in data:
-                        data["entities"] = []
-
-                    return data
+                    return self._normalize_sentiment_result(
+                        data,
+                        analysis_mode=analysis_mode,
+                        analysis_model=analysis_model,
+                        image_count=image_count,
+                        follow_keywords=follow_keywords,
+                    )
             except AIConfigurationError:
                 raise
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"⚠️ 多模态情感分析结果解析失败: {exc}")
 
         return {
             "score": 50,
             "label": "中立",
             "category": "其他",
-            "region": "其他",
+            "region": "全球",
             "keywords": [],
             "entities": [],
+            "visual_analysis": self._normalize_visual_analysis(None, image_count=0),
+            "analysis_mode": "failed",
+            "analysis_model": analysis_model,
+            **({"follow_match": True} if follow_keywords else {}),
         }
 
-    async def batch_analyze_sentiment(self, news_items: List[Dict], follow_keywords: str = "") -> Dict[int, Dict]:
+    async def batch_analyze_sentiment(
+        self,
+        news_items: List[Dict[str, Any]],
+        follow_keywords: str = "",
+    ) -> Dict[int, Dict[str, Any]]:
         """
         输入:
         - `news_items`: 待分析新闻列表（至少包含 id/title）
@@ -804,8 +1103,51 @@ class AIService:
         system_prompt = prompt_manager.get_system_prompt("sentiment_analysis_batch", categories_str=categories_str)
         system_prompt = self._append_follow_keywords_instruction(system_prompt, follow_keywords)
 
-        items_text = ""
+        max_images = max(0, int(getattr(settings, "MULTIMODAL_SENTIMENT_MAX_IMAGES", 3) or 0))
+        image_items: List[Dict[str, Any]] = []
+        text_items: List[Dict[str, Any]] = []
         for item in news_items:
+            item_images = normalize_multimodal_image_urls(item.get("images"), max_images=max_images)
+            if item_images:
+                normalized_item = dict(item)
+                normalized_item["images"] = item_images
+                image_items.append(normalized_item)
+            else:
+                text_items.append(item)
+
+        result_map: Dict[int, Dict[str, Any]] = {}
+
+        async def analyze_image_item(item: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+            """
+            输入:
+            - `item`: 带图片的单条新闻数据
+
+            输出:
+            - 新闻 ID 与对应的多模态情感分析结果
+
+            作用:
+            - 将含图新闻从批量文本请求中拆出，防止不同新闻的图片与标题错配。
+            """
+
+            item_id = int(item["id"])
+            content = str(item.get("summary") or item.get("content") or "").strip()
+            result = await self.analyze_sentiment(
+                str(item.get("title") or "").strip(),
+                content,
+                images=item.get("images"),
+                follow_keywords=follow_keywords,
+            )
+            return item_id, result
+
+        if image_items:
+            image_results = await asyncio.gather(*(analyze_image_item(item) for item in image_items))
+            result_map.update(dict(image_results))
+
+        if not text_items:
+            return result_map
+
+        items_text = ""
+        for item in text_items:
             title = str(item.get("title") or "").strip()
             summary = str(item.get("summary") or item.get("content") or "").strip()
             items_text += f"[ID:{item['id']}] {title}"
@@ -814,14 +1156,14 @@ class AIService:
             items_text += "\n"
         user_prompt = prompt_manager.get_user_prompt("sentiment_analysis_batch", items_text=items_text)
 
-        res = await self._call_llm_with_routes(
+        res, analysis_mode, analysis_model, image_count = await self._call_sentiment_model(
             user_prompt,
             system_prompt,
-            prefer_backup=self._get_prefer_backup("SENTIMENT"),
+            image_urls=[],
         )
 
         if not res:
-            return {}
+            return result_map
 
         try:
             clean_res = res.strip()
@@ -836,7 +1178,6 @@ class AIService:
 
             results_list = json.loads(clean_res)
 
-            result_map: Dict[int, Dict] = {}
             if isinstance(results_list, list):
                 for item in results_list:
                     if "id" in item:
@@ -844,19 +1185,20 @@ class AIService:
                             item_id = int(item["id"])
                         except (TypeError, ValueError):
                             continue
-                        if "category" in item:
-                            item["category"] = self._normalize_category(item["category"])
-                        item["region"] = normalize_regions_to_countries(item.get("region"))
-                        if follow_keywords:
-                            item["follow_match"] = self._parse_bool_value(item.get("follow_match"), default=True)
-                        result_map[item_id] = item
+                        result_map[item_id] = self._normalize_sentiment_result(
+                            item,
+                            analysis_mode=analysis_mode,
+                            analysis_model=analysis_model,
+                            image_count=image_count,
+                            follow_keywords=follow_keywords,
+                        )
             return result_map
 
         except AIConfigurationError:
             raise
         except Exception as e:
             logger.error(f"批量情感分析失败: {e}")
-            return {}
+            return result_map
 
     def _get_prefer_backup(self, route_key: str) -> bool:
         """根据配置键获取是否优先使用备用 AI"""
@@ -1355,7 +1697,8 @@ class AIService:
             return []
         if not self._has_embedding():
             return [[] for _ in texts]
-        cleaned_texts = [str(t or "").replace("\n", " ").strip()[:1000] for t in texts]
+        input_limit = max(1, int(getattr(settings, "EMBEDDING_INPUT_MAX_CHARS", 2000) or 2000))
+        cleaned_texts = [str(t or "").replace("\n", " ").strip()[:input_limit] for t in texts]
 
         url = f"{settings.SILICONFLOW_BASE_URL.rstrip('/')}/embeddings"
         headers = {
@@ -1371,7 +1714,7 @@ class AIService:
         if not indexed_texts:
             return all_embeddings
 
-        batch_size = 20
+        batch_size = max(1, int(getattr(settings, "EMBEDDING_BATCH_SIZE", 10) or 10))
 
         for i in range(0, len(indexed_texts), batch_size):
             batch_items = indexed_texts[i : i + batch_size]
@@ -1382,6 +1725,8 @@ class AIService:
                 "input": batch,
                 "encoding_format": "float",
             }
+            if str(settings.EMBEDDING_MODEL or "").startswith("Qwen/Qwen3-VL-Embedding"):
+                payload["truncate"] = "right"
             try:
                 async def do_embedding_request() -> Any:
                     async with aiohttp.ClientSession() as session:

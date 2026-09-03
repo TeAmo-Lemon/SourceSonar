@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from app.core.exceptions import AIConfigurationError
+from app.core.config import get_settings
 from app.core.logger import logger
 from app.models.news import News
 from app.services.ai_service import ai_service
@@ -1009,7 +1010,13 @@ async def _load_embeddings_for_candidates(
     ids = [int(item.id) for _score, item, _meta in candidates if getattr(item, "id", None)]
     if not ids:
         return {}
-    rows = await db.execute(select(News.id, News.embedding).where(News.id.in_(ids)))
+    embedding_model = get_settings().EMBEDDING_MODEL
+    rows = await db.execute(
+        select(News.id, News.embedding).where(
+            News.id.in_(ids),
+            News.embedding_model == embedding_model,
+        )
+    )
     return {int(news_id): embedding for news_id, embedding in rows.all() if embedding is not None}
 
 

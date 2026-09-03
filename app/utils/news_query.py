@@ -147,6 +147,9 @@ def serialize_news_item(news: News) -> dict[str, Any]:
         "region": normalize_regions_to_countries(news.region),
         "sentiment_label": news.sentiment_label,
         "sentiment_score": news.sentiment_score,
+        "visual_analysis": news.visual_analysis or {},
+        "analysis_mode": news.analysis_mode or "text",
+        "analysis_model": news.analysis_model or "",
         "keywords": news.keywords or [],
         "entities": news.entities or [],
     }

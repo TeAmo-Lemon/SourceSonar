@@ -345,7 +345,12 @@ async def get_topics_list(
             haystack = f"{topic.name or ''} {topic.summary or ''}".lower()
             if lowered_q in haystack:
                 score += 0.6
-            if q_vec and topic.embedding and len(topic.embedding) == len(q_vec):
+            if (
+                q_vec
+                and topic.embedding
+                and topic.embedding_model == settings.EMBEDDING_MODEL
+                and len(topic.embedding) == len(q_vec)
+            ):
                 score += topic_service._cosine_similarity(q_vec, list(topic.embedding))
             if score > 0.2:
                 scored_topics.append((score, topic, effective_updated_time))

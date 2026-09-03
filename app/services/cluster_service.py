@@ -244,7 +244,10 @@ class ClusteringService:
             if not items:
                 return
 
-            items_to_embed = [item for item in items if not item.embedding]
+            items_to_embed = [
+                item for item in items
+                if not item.embedding or item.embedding_model != settings.EMBEDDING_MODEL
+            ]
             if items_to_embed:
                 logger.info(f"   🧠 计算 {len(items_to_embed)} 条缺失向量...")
                 titles = [i.title for i in items_to_embed]
@@ -252,6 +255,7 @@ class ClusteringService:
                 for item, emb in zip(items_to_embed, embeddings):
                     if emb:
                         item.embedding = emb
+                        item.embedding_model = settings.EMBEDDING_MODEL
                 await db.commit()
 
             # 加载历史核验记录 (改为加载最近的 5000 条记录)
@@ -266,7 +270,7 @@ class ClusteringService:
 
             pool = []
             for item in items:
-                if not item.embedding:
+                if not item.embedding or item.embedding_model != settings.EMBEDDING_MODEL:
                     continue
                 pool.append({"id": item.id, "obj": item, "vec": item.embedding, "merged": False})
 

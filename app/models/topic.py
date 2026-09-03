@@ -39,6 +39,8 @@ class Topic(Base):
     keywords = Column(JSON, default=list)
 
     embedding = Column(VectorType, nullable=True)
+    # 记录专题向量所属模型，切换模型后自动重新生成
+    embedding_model = Column(String, nullable=True, index=True)
 
     timeline_items = relationship("TopicTimelineItem", back_populates="topic", cascade="all, delete-orphan")
 

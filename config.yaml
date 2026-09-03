@@ -46,11 +46,31 @@ CRAWLER_PROXY: "http://127.0.0.1:7897"
 
 # ================= AI 模型配置 =================
 # --- Embedding & Rerank (SiliconFlow) ---
-# 用于计算向量相似度和重排序（推荐免费的 硅基流动的 BAAI/bge-large-zh-v1.5）
+# 用于计算向量相似度和重排序（当前使用 Qwen/Qwen3-VL-Embedding-8B）
 # 注册硅基流动：https://cloud.siliconflow.cn/i/fUoGwjZb
 # SILICONFLOW_API_KEY: 已迁移到 .env（密钥不再存放于 yaml）
 # SILICONFLOW_BASE_URL: https://api.siliconflow.cn/v1（已迁移到 .env）
-# EMBEDDING_MODEL: BAAI/bge-large-zh-v1.5（已迁移到 .env）
+# EMBEDDING_MODEL: Qwen/Qwen3-VL-Embedding-8B（已迁移到 .env）
+# 单条向量输入最大字符数；Qwen 向量模型支持服务端右截断，此处保留输入上限控制请求体大小
+EMBEDDING_INPUT_MAX_CHARS: 2000
+EMBEDDING_BATCH_SIZE: 10
+
+# --- 多模态情感分析（SiliconFlow）---
+# 同时分析新闻文本、封面图和正文配图；无图片或图片请求失败时使用同一模型进行纯文本分析
+MULTIMODAL_SENTIMENT_ENABLED: true
+MULTIMODAL_SENTIMENT_MODEL: Qwen/Qwen3-VL-30B-A3B-Thinking
+# 单条新闻最多输入的图片数。数量越大，视觉 Token、延迟和费用越高
+MULTIMODAL_SENTIMENT_MAX_IMAGES: 3
+# 图片细节级别：auto / low / high
+MULTIMODAL_SENTIMENT_IMAGE_DETAIL: auto
+# 多模态模型调用并发，建议低于普通文本模型并发
+MULTIMODAL_SENTIMENT_CONCURRENCY: 2
+# 思考模型通常耗时更长，超时单位为秒
+MULTIMODAL_SENTIMENT_TIMEOUT_SECONDS: 180
+MULTIMODAL_SENTIMENT_MAX_TOKENS: 4096
+# 分析前先由本服务下载图片并转为 base64，规避外部图床防盗链、过期签名和地区访问限制
+MULTIMODAL_SENTIMENT_IMAGE_TIMEOUT_SECONDS: 12
+MULTIMODAL_SENTIMENT_MAX_IMAGE_BYTES: 5242880
 
 # --- 主力生成模型 ---
 # 用于生成新闻摘要 (推荐免费的 硅基流动的 THUDM/GLM-4-9B-0414)

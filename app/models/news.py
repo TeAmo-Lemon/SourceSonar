@@ -58,9 +58,15 @@ class News(Base):
     sources = Column(JSON, default=list)
 
     embedding = Column(VectorType, nullable=True)
+    # 记录生成该向量的模型，切换模型后避免跨向量空间错误比较
+    embedding_model = Column(String, nullable=True, index=True)
 
     sentiment_score = Column(Float, default=50.0)
     sentiment_label = Column(String, default="中立")
+    # 保存图片理解摘要、视觉情绪线索和图文一致性，便于复核多模态分析依据
+    visual_analysis = Column(JSON, default=dict)
+    analysis_mode = Column(String, default="text")
+    analysis_model = Column(String, nullable=True)
     category = Column(String, default="其他")
     region = Column(String, default="其他")
     keywords = Column(JSON, default=list)

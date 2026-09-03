@@ -10,6 +10,7 @@
         daysSelect: document.getElementById('traceDays'),
         quota: document.getElementById('traceQuota'),
         hotList: document.getElementById('traceHotList'),
+        historyList: document.getElementById('traceHistoryList'),
         result: document.getElementById('traceResult'),
         resultTitle: document.getElementById('traceResultTitle'),
         metrics: document.getElementById('traceMetrics'),
@@ -23,6 +24,8 @@
 
     // 最近一次分析结果与图表展示维度（media=按媒体 / country=按国家）
     let lastResult = null;
+    let activeRecordId = 0;
+    let traceConfigured = true;
     let radarMode = 'media';
     let spreadMode = 'media';
 
@@ -66,8 +69,8 @@
     }
 
     function setAnalyzing(analyzing) {
-        els.analyzeBtn.disabled = analyzing;
-        els.analyzeAgainBtn.disabled = analyzing;
+        els.analyzeBtn.disabled = analyzing || !traceConfigured;
+        els.analyzeAgainBtn.disabled = analyzing || !traceConfigured;
         els.analyzeBtn.textContent = analyzing ? '分析中...' : '开始溯源';
         els.analyzeAgainBtn.textContent = analyzing ? '分析中...' : '重新分析';
     }
@@ -80,9 +83,10 @@
         if (lang && ['zh', 'en', 'all'].includes(lang)) els.languageSelect.value = lang;
         const days = Number(params.get('days') || 0);
         if (days === 7 || days === 14 || days === 30) els.daysSelect.value = String(days);
+        const newsId = Number(params.get('news_id') || 0);
+        if (newsId > 0) els.eventInput.dataset.newsId = String(newsId);
 
-        await loadStatus();
-        await loadHotNews();
+        await Promise.all([loadStatus(), loadHotNews(), loadHistory()]);
 
         els.analyzeBtn.onclick = () => analyze();
         els.analyzeAgainBtn.onclick = () => analyze();
@@ -100,9 +104,16 @@
             renderSpread();
         });
 
+        // URL 中带记录 ID 时直接恢复数据库快照，避免刷新再次消耗 NewsAPI 额度。
+        const recordId = Number(params.get('record_id') || 0);
+        if (recordId > 0) {
+            await loadTraceRecord(recordId);
+            return;
+        }
+
         // 从首页热点新闻跳转过来时自动分析
         const hasEvent = (els.eventInput.value || '').trim();
-        const hasNewsId = params.get('news_id');
+        const hasNewsId = newsId > 0;
         if (hasEvent || hasNewsId) {
             analyze();
         }
@@ -126,14 +137,15 @@
             const resp = await fetch('/api/trace/status', { cache: 'no-store' });
             if (!resp.ok) return;
             const data = await resp.json();
+            traceConfigured = Boolean(data.configured);
             if (data.configured) {
                 els.quota.textContent = `NewsAPI 今日剩余额度：${data.remaining_budget} / ${data.daily_budget} 次`;
                 els.quota.classList.add('ok');
             } else {
                 els.quota.textContent = '⚠️ NewsAPI 未配置（.env 中缺少 NEWSAPI_API_KEY），溯源功能不可用';
                 els.quota.classList.add('warn');
-                els.analyzeBtn.disabled = true;
             }
+            setAnalyzing(false);
         } catch (e) {
             console.error('加载 NewsAPI 状态失败', e);
         }
@@ -171,6 +183,92 @@
         }
     }
 
+    // 加载轻量历史列表，完整结果仅在用户点击时按记录 ID 获取。
+    async function loadHistory() {
+        if (!els.historyList) return;
+        try {
+            const resp = await fetch('/api/trace/history?limit=20', { cache: 'no-store' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            const records = Array.isArray(data.data) ? data.data : [];
+            if (!records.length) {
+                els.historyList.innerHTML = '<span class="trace-empty">暂无溯源记录</span>';
+                return;
+            }
+
+            els.historyList.innerHTML = '';
+            records.forEach((record) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'trace-history-item';
+                button.dataset.recordId = String(record.id || 0);
+                button.classList.toggle('active', Number(record.id || 0) === activeRecordId);
+
+                const eventName = document.createElement('span');
+                eventName.className = 'trace-history-event';
+                eventName.textContent = record.event || '未命名事件';
+
+                const meta = document.createElement('span');
+                meta.className = 'trace-history-meta';
+                meta.textContent = `${formatTime(record.created_at)} · ${Number(record.article_count || 0)} 篇 · ${Number(record.days || 0)} 天`;
+
+                button.append(eventName, meta);
+                button.onclick = () => loadTraceRecord(Number(record.id || 0));
+                els.historyList.appendChild(button);
+            });
+        } catch (e) {
+            console.error('加载溯源历史失败', e);
+            els.historyList.innerHTML = '<span class="trace-empty">历史记录加载失败</span>';
+        }
+    }
+
+    // 从后端恢复一条完整溯源快照，不重新运行分析。
+    async function loadTraceRecord(recordId) {
+        if (!recordId) return;
+        setAnalyzing(true);
+        showLoading();
+        try {
+            const resp = await fetch(`/api/trace/history/${recordId}`, { cache: 'no-store' });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+                showError(`记录加载失败：${(data && data.detail) || `HTTP ${resp.status}`}`);
+                return;
+            }
+            applyRecordContext(data.record || {});
+            renderResult(data);
+        } catch (e) {
+            showError(`记录加载失败：${e.message || e}`);
+        } finally {
+            setAnalyzing(false);
+        }
+    }
+
+    // 将历史记录参数同步到操作区，便于基于旧记录重新分析。
+    function applyRecordContext(record) {
+        if (!record || typeof record !== 'object') return;
+        els.eventInput.value = record.event || '';
+        if (record.news_id) els.eventInput.dataset.newsId = String(record.news_id);
+        else delete els.eventInput.dataset.newsId;
+        if (['zh', 'en', 'all'].includes(record.language)) els.languageSelect.value = record.language;
+        if ([7, 14, 30].includes(Number(record.days))) els.daysSelect.value = String(record.days);
+    }
+
+    // 让当前记录拥有可刷新、可复制的稳定页面地址。
+    function updateRecordUrl(recordId) {
+        if (!recordId || !window.history || !window.history.replaceState) return;
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('record_id', String(recordId));
+        window.history.replaceState({ recordId }, '', url.toString());
+    }
+
+    function highlightHistoryRecord(recordId) {
+        if (!els.historyList) return;
+        els.historyList.querySelectorAll('.trace-history-item').forEach((item) => {
+            item.classList.toggle('active', Number(item.dataset.recordId || 0) === Number(recordId || 0));
+        });
+    }
+
     function highlightHotChip(activeChip) {
         els.hotList.querySelectorAll('.trace-hot-chip').forEach((chip) => {
             chip.classList.toggle('active', chip === activeChip);
@@ -181,6 +279,11 @@
     els.eventInput.addEventListener('input', () => {
         delete els.eventInput.dataset.newsId;
         highlightHotChip(null);
+        activeRecordId = 0;
+        highlightHistoryRecord(0);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('record_id');
+        window.history.replaceState({}, '', url.toString());
     });
 
     // ---------- 分析 ----------
@@ -214,8 +317,9 @@
                 return;
             }
             renderResult(data);
+            await loadHistory();
         } catch (e) {
-            showError(`请求出错：${escapeHtml(e.message || e)}`);
+            showError(`请求出错：${e.message || e}`);
         } finally {
             setAnalyzing(false);
         }
@@ -234,7 +338,7 @@
     function showError(message) {
         els.result.classList.remove('is-hidden');
         els.resultTitle.textContent = '分析失败';
-        els.metrics.innerHTML = `<div class="trace-error">${message}</div>`;
+        els.metrics.innerHTML = `<div class="trace-error">${escapeHtml(message)}</div>`;
         els.narrative.classList.add('is-hidden');
     }
 
@@ -245,6 +349,13 @@
         const empty = meta.reason === 'empty' || !overview.total;
 
         lastResult = data;
+        const record = data.record && typeof data.record === 'object' ? data.record : {};
+        if (Number(record.id || 0) > 0) {
+            activeRecordId = Number(record.id);
+            applyRecordContext(record);
+            updateRecordUrl(activeRecordId);
+            highlightHistoryRecord(activeRecordId);
+        }
         els.result.classList.remove('is-hidden');
         els.resultTitle.textContent = `「${escapeHtml((data.query_label || '事件').slice(0, 60))}」`;
 

@@ -1865,6 +1865,28 @@ const IS_ADMIN = !!reportPageData.isAdmin;
         `).join('');
     }
 
+    // 渲染模型从图片中提取的情绪依据与图文核验结果。
+    function renderVisualAnalysis(news) {
+        const visual = news && news.visual_analysis;
+        if (!visual || typeof visual !== 'object' || Number(visual.image_count || 0) <= 0) return '';
+        const cues = Array.isArray(visual.sentiment_cues) ? visual.sentiment_cues.filter(Boolean) : [];
+        const ocr = Array.isArray(visual.ocr_text) ? visual.ocr_text.filter(Boolean) : [];
+        const consistency = visual.text_image_consistency || '无法判断';
+        const model = news.analysis_model || 'Qwen3-VL';
+        return `
+            <div class="detail-section multimodal-analysis-card">
+                <div class="detail-section-title">
+                    <span>多模态视觉分析</span>
+                    <span class="multimodal-badge">图文联合 · ${Number(visual.image_count || 0)} 张</span>
+                </div>
+                ${visual.summary ? `<div class="multimodal-summary">${escapeHtml(visual.summary)}</div>` : ''}
+                <div class="multimodal-meta"><span>图文关系：${escapeHtml(consistency)}</span><span>模型：${escapeHtml(model)}</span></div>
+                ${cues.length ? `<div class="multimodal-evidence"><strong>视觉情绪线索</strong>${escapeHtml(cues.join(' · '))}</div>` : ''}
+                ${ocr.length ? `<div class="multimodal-evidence"><strong>图片文字</strong>${escapeHtml(ocr.join(' · '))}</div>` : ''}
+            </div>
+        `;
+    }
+
     function renderNewsDetail(data) {
         const news = data.news || {};
         const status = data.content_status || {};
@@ -1902,6 +1924,7 @@ const IS_ADMIN = !!reportPageData.isAdmin;
                 <span class="sentiment-pill ${sentimentClass(news.sentiment_label)}">${escapeHtml(news.sentiment_label || '未分析')}${news.sentiment_score !== undefined ? '：' + news.sentiment_score : ''}</span>
             </div>
             ${renderNewsImages(news.images, true)}
+            ${renderVisualAnalysis(news)}
             <div class="detail-actions">
                 <a class="detail-primary-link" href="${escapeHtml(newsUrl || '#')}" target="_blank" rel="noopener noreferrer">查看原文</a>
                 <button class="btn-link" data-action="generate-summary" data-news-id="${news.id}">重新生成摘要</button>

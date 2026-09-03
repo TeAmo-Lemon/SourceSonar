@@ -14,6 +14,7 @@ from sqlalchemy.orm import defer
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.logger import logger
+from app.core.config import get_settings
 from app.models.news import News
 from app.utils.news_search import (
     NewsSearchResult,
@@ -129,7 +130,7 @@ def _loaded_embedding(news: News) -> Any:
     - 只读取内存中已有向量，不触发数据库懒加载。
     """
 
-    if _is_embedding_unloaded(news):
+    if _is_embedding_unloaded(news) or news.embedding_model != get_settings().EMBEDDING_MODEL:
         return None
     return getattr(news, "embedding", None)
 
@@ -151,7 +152,12 @@ async def _ensure_source_embedding(db: AsyncSession, source_news: News) -> Any:
     if embedding is not None or not _is_embedding_unloaded(source_news):
         return embedding
 
-    row = await db.execute(select(News.embedding).where(News.id == source_news.id))
+    row = await db.execute(
+        select(News.embedding).where(
+            News.id == source_news.id,
+            News.embedding_model == get_settings().EMBEDDING_MODEL,
+        )
+    )
     embedding = row.scalar_one_or_none()
     set_committed_value(source_news, "embedding", embedding)
     return embedding
@@ -177,7 +183,12 @@ async def _load_candidate_embeddings(
     if not ids:
         return
 
-    rows = await db.execute(select(News.id, News.embedding).where(News.id.in_(ids)))
+    rows = await db.execute(
+        select(News.id, News.embedding).where(
+            News.id.in_(ids),
+            News.embedding_model == get_settings().EMBEDDING_MODEL,
+        )
+    )
     embedding_by_id = {int(news_id): embedding for news_id, embedding in rows.all()}
     for _score, item in candidates:
         set_committed_value(item, "embedding", embedding_by_id.get(int(item.id)))

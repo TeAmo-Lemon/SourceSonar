@@ -970,6 +970,7 @@ class CrawlerService:
                     "id": idx,
                     "title": item.get("title", ""),
                     "summary": item.get("summary") or item.get("content") or "",
+                    "images": item.get("images") or [],
                 }
                 for idx, item in enumerate(final_list)
             ]
@@ -994,6 +995,9 @@ class CrawlerService:
                             item["region"] = result.get("region", item.get("region", "全球"))
                             item["keywords"] = result.get("keywords", item.get("keywords", []))
                             item["entities"] = result.get("entities", item.get("entities", []))
+                            item["visual_analysis"] = result.get("visual_analysis", item.get("visual_analysis", {}))
+                            item["analysis_mode"] = result.get("analysis_mode", item.get("analysis_mode", "text"))
+                            item["analysis_model"] = result.get("analysis_model", item.get("analysis_model"))
                         filtered_list.append(item)
                     final_list = filtered_list
                     logger.info(f"✅ AI 关注范围过滤完成: 跳过 {skipped_by_ai} 条，保留 {len(final_list)} 条")
@@ -1019,6 +1023,9 @@ class CrawlerService:
                     sources=[{"name": item["source"], "url": item.get("original_url", item["url"])}],
                     sentiment_score=item.get("sentiment_score", 50.0),
                     sentiment_label=item.get("sentiment_label", "中立"),
+                    visual_analysis=item.get("visual_analysis", {}),
+                    analysis_mode=item.get("analysis_mode", "text"),
+                    analysis_model=item.get("analysis_model"),
                     category=item.get("category", "其他"),
                     region=item.get("region", "全球"),
                     keywords=item.get("keywords", []),

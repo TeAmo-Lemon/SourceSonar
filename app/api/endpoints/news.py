@@ -528,6 +528,7 @@ async def api_generate_summary(news_id: int, db: AsyncSession = Depends(get_db))
         embs = await ai_service.get_embeddings([txt_to_embed])
         if embs and embs[0]:
             news.embedding = embs[0]
+            news.embedding_model = settings.EMBEDDING_MODEL
     except Exception:
         pass
 
